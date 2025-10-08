@@ -54,6 +54,22 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 
 ## Installation & Setup
 
+### Automated Bootstrap (Recommended)
+
+Run the bootstrap script after cloning to a fresh Pi:
+
+```bash
+./scripts/setup/bootstrap.sh
+```
+
+- Docker install is skipped by default; set `INSTALL_DOCKER=1` to enable it.
+- Reboot once the script finishes so Docker group membership applies.
+- Confirm everything with:
+
+  ```bash
+  ./scripts/setup/verify.sh
+  ```
+
 ### Initial Pi Configuration
 
 1. **Flash SD Card:**
@@ -132,7 +148,7 @@ chromium-browser \
   http://192.168.1.220:8123/your-dashboard-path
 ```
 
-**Autostart Configuration:**
+**Autostart Configuration:** (handled automatically by `scripts/setup/bootstrap.sh`)
 ```bash
 # Create autostart directory
 mkdir -p ~/.config/autostart
@@ -149,7 +165,7 @@ X-GNOME-Autostart-enabled=true
 EOF
 ```
 
-**Make script executable:**
+**Make script executable:** (the bootstrap script runs this step)
 ```bash
 chmod +x kiosk.sh
 ```
