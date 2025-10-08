@@ -10,7 +10,34 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
-from typing import Optional
+from typing import Optional, Sequence
+
+VCGENCMD_DISPLAY_IDS: Sequence[str] = ("0", "1", "2", "3", "7")
+
+
+def run_command(
+    cmd: Sequence[str], *, capture_output: bool = False, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        check=check,
+        text=True,
+        capture_output=capture_output,
+    )
+
+
+def _wake_x_session() -> None:
+    xset = shutil.which("xset")
+    if not xset:
+        return
+    run_command([xset, "dpms", "force", "on"], check=False)
+
+
+def _suspend_x_session() -> None:
+    xset = shutil.which("xset")
+    if not xset:
+        return
+    run_command([xset, "dpms", "force", "off"], check=False)
 
 
 @dataclass(frozen=True)
@@ -20,34 +47,51 @@ class Backend:
 
     def set_power(self, on: bool) -> None:
         if self.name == "vcgencmd":
-            run_command([self.command, "display_power", "1" if on else "0"])
+            power = "1" if on else "0"
+            # Try default display plus common connectors (HDMI-0/1).
+            run_command([self.command, "display_power", power], check=False)
+            for display_id in VCGENCMD_DISPLAY_IDS:
+                run_command(
+                    [self.command, "display_power", power, display_id], check=False
+                )
+            if on:
+                _wake_x_session()
+            else:
+                _suspend_x_session()
             return
 
         if self.name == "tvservice":
             # tvservice blanks HDMI; xset wake keeps X session alive when powering back.
             if on:
-                run_command([self.command, "-p"])
-                xset = shutil.which("xset")
-                if xset:
-                    run_command([xset, "dpms", "force", "on"], check=False)
+                run_command([self.command, "-p"], check=False)
+                _wake_x_session()
             else:
-                run_command([self.command, "-o"])
+                run_command([self.command, "-o"], check=False)
+                _suspend_x_session()
             return
 
         raise RuntimeError(f"Unsupported backend: {self.name}")
 
     def read_power(self) -> Optional[bool]:
         if self.name == "vcgencmd":
-            result = run_command([self.command, "display_power"], capture_output=True)
-            if result.stdout:
+            states = []
+            for display_id in (None, *VCGENCMD_DISPLAY_IDS):
+                cmd = [self.command, "display_power"]
+                if display_id is not None:
+                    cmd.append(display_id)
+                result = run_command(cmd, capture_output=True, check=False)
+                if result.returncode != 0 or not result.stdout:
+                    continue
                 if "display_power=1" in result.stdout:
-                    return True
-                if "display_power=0" in result.stdout:
-                    return False
+                    states.append(True)
+                elif "display_power=0" in result.stdout:
+                    states.append(False)
+            if states:
+                return any(states)
             return None
 
         if self.name == "tvservice":
-            result = run_command([self.command, "-s"], capture_output=True)
+            result = run_command([self.command, "-s"], capture_output=True, check=False)
             if "TV is off" in result.stdout:
                 return False
             if "HDMI" in result.stdout or "DVI" in result.stdout:
@@ -55,15 +99,6 @@ class Backend:
             return None
 
         return None
-
-
-def run_command(cmd, *, capture_output: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd,
-        check=check,
-        text=True,
-        capture_output=capture_output,
-    )
 
 
 def get_backend() -> Backend:
@@ -84,7 +119,9 @@ def parse_time(value: str) -> dt_time:
     try:
         return dt_time.fromisoformat(value)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(f"Invalid time '{value}'. Use HH:MM (24-hour).") from exc
+        raise argparse.ArgumentTypeError(
+            f"Invalid time '{value}'. Use HH:MM (24-hour)."
+        ) from exc
 
 
 def should_be_on(now: dt_time, on_time: dt_time, off_time: dt_time) -> bool:
@@ -151,8 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.set_defaults(func=cmd_status)
 
     schedule_parser = subparsers.add_parser("schedule", help="loop to enforce an on/off schedule")
-    schedule_parser.add_argument("--on-time", default="07:00", help="HH:MM when the display should power on (default 07:00)")
-    schedule_parser.add_argument("--off-time", default="22:00", help="HH:MM when the display should power off (default 22:00)")
+    schedule_parser.add_argument(
+        "--on-time", default="07:00", help="HH:MM when the display should power on (default 07:00)"
+    )
+    schedule_parser.add_argument(
+        "--off-time", default="22:00", help="HH:MM when the display should power off (default 22:00)"
+    )
     schedule_parser.add_argument(
         "--interval",
         type=int,
