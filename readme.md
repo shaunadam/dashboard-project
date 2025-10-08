@@ -7,10 +7,6 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 - **Raspberry Pi 4** (Model B)
 - **15" USB Touchscreen Display**
 - **MicroSD Card** (bootable system)
-- **Future additions:**
-  - Light sensor or ultrasonic sensor for automatic display on/off
-
-## Software Stack
 
 ### Operating System
 - **Raspberry Pi OS with Desktop** (64-bit)
@@ -36,9 +32,9 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 ## Home Assistant Integration
 
 ### Infrastructure
-- **Home Assistant VM** running on Ubuntu Desktop (basement server)
-- **IP Address:** `192.168.1.220`
-- **Connection:** Ethernet (stable, reliable)
+- **Home Assistant VM** running on Ubuntu Desktop (basement server, not dashboard)
+
+
 
 ### Integrations
 - **Kids Chores Custom Integration** ([ad-ha/kidschores-ha](https://github.com/ad-ha/kidschores-ha))
@@ -172,177 +168,9 @@ chmod +x kiosk.sh
 
 **Exit Kiosk Mode (via SSH):**
 ```bash
-ssh shaun@dashboard.local
+ssh user@dashboard.local
 pkill chromium
-```
 
-**Reboot:**
-```bash
-sudo reboot
-```
-
-### Remote Access
-
-**SSH:**
-```bash
-ssh shaun@dashboard.local
-```
-
-**VNC:**
-- Connect to `dashboard.local:5900` using VNC client
-
-### Development Workflow
-
-1. **Edit files locally** on your main machine
-2. **Commit and push** to git repository
-3. **SSH into Pi:**
-   ```bash
-   ssh shaun@dashboard.local
-   cd ~/dashboard-project
-   git pull
-   ```
-4. **Restart services** as needed:
-   ```bash
-   pkill chromium  # Kiosk will restart on next boot
-   # or
-   sudo reboot
-   ```
-
-## Future Enhancements
-
-### Planned Features
-- [ ] Light sensor integration for automatic display control
-- [ ] Ultrasonic sensor for presence detection
-- [ ] Dashboard aesthetic improvements
-- [ ] Additional Home Assistant integrations (calendar, smart home controls)
-- [ ] Watchdog service to restart browser if it crashes
-- [ ] Automated backup script for configurations
-
-### Sensor Integration
-```python
-# Example: Display control via light sensor
-from gpiozero import LightSensor
-import subprocess
-
-sensor = LightSensor(17)  # GPIO pin 17
-sensor.wait_for_light()
-subprocess.run(['vcgencmd', 'display_power', '1'])  # Turn on
-```
-
-### Potential Improvements
-- **USB SSD migration** for better longevity and performance
-- **Static IP assignment** for reliability
-- **Automated git pull** via cron for zero-touch updates
-- **Custom CSS themes** for Home Assistant dashboard
-- **Touch-optimized UI elements**
-
-## Troubleshooting
-
-### Kiosk Won't Start
-```bash
-# Check if script is executable
-ls -l ~/dashboard-project/kiosk.sh
-
-# Check autostart entry
-cat ~/.config/autostart/kiosk.desktop
-
-# Test script manually
-DISPLAY=:0 ~/dashboard-project/kiosk.sh
-```
-
-### Display Issues
-```bash
-# Turn display on
-vcgencmd display_power 1
-
-# Turn display off
-vcgencmd display_power 0
-
-# Check display status
-tvservice -s
-```
-
-### Network Issues
-```bash
-# Check IP address
-hostname -I
-
-# Check connectivity to Home Assistant
-ping 192.168.1.220
-
-# Check WiFi status
-iwconfig
-```
-
-### Chromium Crashes
-```bash
-# Kill all chromium processes
-pkill -9 chromium
-
-# Clear chromium cache
-rm -rf ~/.cache/chromium
-rm -rf ~/.config/chromium
-
-# Restart
-sudo reboot
-```
-
-## Technical Notes
-
-### Why Not Run Home Assistant on Pi?
-- **Performance:** Pi 4 struggles with HA, especially database writes
-- **SD Card Wear:** Constant writes reduce lifespan
-- **Reliability:** VM on Ubuntu desktop is more stable
-- **Updates:** Faster and more reliable on x86 architecture
-
-### SD Card vs USB SSD
-**Current:** Using SD card with git-based recovery strategy
-- If card fails, re-image and `git pull`
-- Good quality SD card should last 2-3+ years for this use case
-- Much lighter write load than running Home Assistant
-
-**Future:** Could migrate to USB SSD for better performance and longevity
-
-### Environment Variables
-- `DISPLAY=:0` - Tells GUI programs to use the Pi's physical display (required for SSH commands)
-
-### Docker on Pi
-- Docker runs well on Pi 4 (4GB+ models)
-- Useful for future containerized services
-- Portainer available for web-based management
-
-## Maintenance
-
-### Regular Updates
-```bash
-ssh shaun@dashboard.local
-sudo apt update && sudo apt upgrade -y
-sudo reboot
-```
-
-### Backup Configuration
-```bash
-# From Pi
-cd ~/dashboard-project
-git add .
-git commit -m "Backup configuration"
-git push
-
-# Or backup to Home Assistant server
-scp -r ~/dashboard-project/ user@192.168.1.220:/backup/path/
-```
-
-### Monitoring
-```bash
-# Check system resources
-htop
-
-# Check disk usage
-df -h
-
-# Check temperature
-vcgencmd measure_temp
-```
 
 ## Resources
 
@@ -359,7 +187,3 @@ vcgencmd measure_temp
 3. **Aesthetic:** High WAF (Wife Acceptance Factor) - clean, modern interface
 4. **Location:** Prominent area in home - needs to look good and be functional
 5. **Maintenance:** Minimal physical access required after installation
-
-## License
-
-Internal family use only.
