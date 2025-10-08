@@ -60,10 +60,10 @@ check_autostart() {
 }
 
 check_kiosk_script() {
-  if [[ -x "${REPO_ROOT}/kiosk.sh" ]]; then
+  if [[ -x "${REPO_ROOT}/scripts/kiosk.sh" ]]; then
     log "kiosk.sh is executable."
   else
-    issues+=("kiosk.sh is not executable; run chmod +x ${REPO_ROOT}/kiosk.sh")
+    issues+=("kiosk.sh is not executable; run chmod +x ${REPO_ROOT}/scripts/kiosk.sh")
   fi
 }
 

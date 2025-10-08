@@ -44,9 +44,12 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 
 ```
 ~/dashboard-project/
-├── kiosk.sh                 # Browser startup script
-├── scripts/                 # Python automation scripts (future)
-│   ├── display_control.py   # Sensor-based display control
+├── scripts/
+│   ├── kiosk.sh             # Browser startup script
+│   ├── setup/
+│   │   ├── bootstrap.sh     # Automated provisioning script
+│   │   └── verify.sh        # Post-setup checks
+│   ├── display_control.py   # Sensor-based display control (future)
 │   └── ...
 ├── config/                  # Configuration files (future)
 └── README.md               # This file
@@ -115,7 +118,7 @@ Run the bootstrap script after cloning to a fresh Pi:
 
 ### Kiosk Mode Setup
 
-The `kiosk.sh` script launches Chromium in fullscreen kiosk mode on boot.
+The `scripts/kiosk.sh` launcher starts Chromium in fullscreen kiosk mode on boot.
 
 **kiosk.sh Configuration:**
 ```bash
@@ -158,7 +161,7 @@ cat > ~/.config/autostart/kiosk.desktop << EOF
 [Desktop Entry]
 Type=Application
 Name=Kiosk
-Exec=/home/shaun/dashboard-project/kiosk.sh
+Exec=/home/shaun/dashboard-project/scripts/kiosk.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
@@ -167,7 +170,7 @@ EOF
 
 **Make script executable:** (the bootstrap script runs this step)
 ```bash
-chmod +x kiosk.sh
+chmod +x scripts/kiosk.sh
 ```
 
 ## Usage
@@ -179,7 +182,7 @@ chmod +x kiosk.sh
 
 **Manual Start:**
 ```bash
-./kiosk.sh
+./scripts/kiosk.sh
 ```
 
 **Exit Kiosk Mode (via SSH):**

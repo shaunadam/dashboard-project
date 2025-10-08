@@ -78,7 +78,7 @@ sync_autostart_entry() {
 }
 
 make_scripts_executable() {
-  chmod +x "${REPO_ROOT}/kiosk.sh"
+  chmod +x "${REPO_ROOT}/scripts/kiosk.sh"
   chmod +x "${SCRIPT_DIR}/"*.sh
 }
 
