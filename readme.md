@@ -49,7 +49,7 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 │   ├── setup/
 │   │   ├── bootstrap.sh     # Automated provisioning script
 │   │   └── verify.sh        # Post-setup checks
-│   ├── display_control.py   # Sensor-based display control (future)
+│   ├── display_control.py   # HDMI display power control
 │   └── ...
 ├── config/                  # Configuration files (future)
 └── README.md               # This file
@@ -189,6 +189,14 @@ chmod +x scripts/kiosk.sh
 ```bash
 ssh user@dashboard.local
 pkill chromium
+
+
+### Display Power Control
+
+- Toggle manually with `python3 scripts/display_control.py on` or `off`.
+- Check HDMI state with `python3 scripts/display_control.py status` (reports `on` or `off`).
+- Run a local schedule loop, e.g. `python3 scripts/display_control.py schedule --on-time 07:00 --off-time 22:30`, to keep the panel awake during the day and asleep overnight.
+- For a persistent schedule, register the command as a user service or cron job (example: `systemd-run --user --unit display-schedule --on-calendar="*-*-* 07:00" python3 /home/pi/dashboard-project/scripts/display_control.py on`).
 
 
 ## Resources
