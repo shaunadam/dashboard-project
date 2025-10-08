@@ -4,15 +4,30 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
+from pathlib import Path
 from typing import Optional, Sequence
 
 VCGENCMD_DISPLAY_IDS: Sequence[str] = ("0", "1", "2", "3", "7")
+
+
+def _build_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("DISPLAY", ":0")
+    if "XAUTHORITY" not in env:
+        xauth = Path.home() / ".Xauthority"
+        if xauth.exists():
+            env["XAUTHORITY"] = str(xauth)
+    return env
+
+
+DEFAULT_ENV = _build_env()
 
 
 def run_command(
@@ -23,6 +38,7 @@ def run_command(
         check=check,
         text=True,
         capture_output=capture_output,
+        env=DEFAULT_ENV,
     )
 
 
@@ -46,28 +62,22 @@ class Backend:
     command: str
 
     def set_power(self, on: bool) -> None:
+        if on:
+            _wake_x_session()
+        else:
+            _suspend_x_session()
+
         if self.name == "vcgencmd":
             power = "1" if on else "0"
-            # Try default display plus common connectors (HDMI-0/1).
             run_command([self.command, "display_power", power], check=False)
             for display_id in VCGENCMD_DISPLAY_IDS:
                 run_command(
                     [self.command, "display_power", power, display_id], check=False
                 )
-            if on:
-                _wake_x_session()
-            else:
-                _suspend_x_session()
             return
 
         if self.name == "tvservice":
-            # tvservice blanks HDMI; xset wake keeps X session alive when powering back.
-            if on:
-                run_command([self.command, "-p"], check=False)
-                _wake_x_session()
-            else:
-                run_command([self.command, "-o"], check=False)
-                _suspend_x_session()
+            run_command([self.command, "-p" if on else "-o"], check=False)
             return
 
         raise RuntimeError(f"Unsupported backend: {self.name}")
