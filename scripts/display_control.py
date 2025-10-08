@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, time as dt_time
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Iterable, Optional, Sequence
 
 VCGENCMD_DISPLAY_IDS: Sequence[str] = ("0", "1", "2", "3", "7")
 
@@ -42,18 +43,64 @@ def run_command(
     )
 
 
-def _wake_x_session() -> None:
+def _dpms_force(on: bool) -> bool:
     xset = shutil.which("xset")
     if not xset:
-        return
-    run_command([xset, "dpms", "force", "on"], check=False)
+        return False
+
+    # Enable DPMS before forcing a state to avoid "unknown option" errors on some builds.
+    run_command([xset, "+dpms"], capture_output=True, check=False)
+    result = run_command(
+        [xset, "dpms", "force", "on" if on else "off"],
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
-def _suspend_x_session() -> None:
-    xset = shutil.which("xset")
-    if not xset:
-        return
-    run_command([xset, "dpms", "force", "off"], check=False)
+def _xrandr_connectors() -> Iterable[str]:
+    xrandr = shutil.which("xrandr")
+    if not xrandr:
+        return []
+
+    result = run_command([xrandr, "--query"], capture_output=True, check=False)
+    if result.returncode != 0 or not result.stdout:
+        return []
+
+    pattern = re.compile(r"^(?P<name>\S+)\s+connected( primary)?")
+    for line in result.stdout.splitlines():
+        match = pattern.match(line)
+        if match:
+            yield match.group("name")
+
+
+def _xrandr_toggle(on: bool) -> bool:
+    xrandr = shutil.which("xrandr")
+    if not xrandr:
+        return False
+
+    connectors = list(_xrandr_connectors())
+    if not connectors:
+        return False
+
+    success = False
+    for connector in connectors:
+        args = [xrandr, "--output", connector]
+        args.extend(["--auto"] if on else ["--off"])
+        result = run_command(args, capture_output=True, check=False)
+        success = success or result.returncode == 0
+    return success
+
+
+def _ensure_display_state(on: bool) -> None:
+    if on:
+        if _dpms_force(True):
+            return
+        _xrandr_toggle(True)
+    else:
+        if _dpms_force(False):
+            return
+        _xrandr_toggle(False)
 
 
 @dataclass(frozen=True)
@@ -63,21 +110,38 @@ class Backend:
 
     def set_power(self, on: bool) -> None:
         if on:
-            _wake_x_session()
+            self._power_on()
+            _ensure_display_state(True)
         else:
-            _suspend_x_session()
+            _ensure_display_state(False)
+            self._power_off()
 
+    def _power_on(self) -> None:
         if self.name == "vcgencmd":
-            power = "1" if on else "0"
-            run_command([self.command, "display_power", power], check=False)
+            run_command([self.command, "display_power", "1"], check=False)
             for display_id in VCGENCMD_DISPLAY_IDS:
                 run_command(
-                    [self.command, "display_power", power, display_id], check=False
+                    [self.command, "display_power", "1", display_id], check=False
                 )
             return
 
         if self.name == "tvservice":
-            run_command([self.command, "-p" if on else "-o"], check=False)
+            run_command([self.command, "-p"], check=False)
+            return
+
+        raise RuntimeError(f"Unsupported backend: {self.name}")
+
+    def _power_off(self) -> None:
+        if self.name == "vcgencmd":
+            run_command([self.command, "display_power", "0"], check=False)
+            for display_id in VCGENCMD_DISPLAY_IDS:
+                run_command(
+                    [self.command, "display_power", "0", display_id], check=False
+                )
+            return
+
+        if self.name == "tvservice":
+            run_command([self.command, "-o"], check=False)
             return
 
         raise RuntimeError(f"Unsupported backend: {self.name}")
