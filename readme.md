@@ -15,7 +15,6 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 
 ### Core Software
 - **Chromium Browser** - Kiosk mode display
-- **Docker** - For containerized services (future use)
 - **Python 3** - For automation scripts and sensor integration
 - **Git** - Version control
 - **VNC** - Remote desktop access
@@ -46,12 +45,13 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 ~/dashboard-project/
 ├── scripts/
 │   ├── kiosk.sh             # Browser startup script
-│   ├── setup/
-│   │   ├── bootstrap.sh     # Automated provisioning script
-│   │   └── verify.sh        # Post-setup checks
-│   ├── display_control.py   # HDMI display power control
-│   └── ...
-├── config/                  # Configuration files (future)
+│   ├── display_control.py   # HDMI display power control (future feature)
+│   └── setup/
+│       ├── bootstrap.sh     # Automated provisioning script
+│       └── verify.sh        # Post-setup checks
+├── config/
+│   └── autostart/
+│       └── kiosk.desktop    # Autostart template
 └── README.md               # This file
 ```
 
@@ -65,13 +65,11 @@ Run the bootstrap script after cloning to a fresh Pi:
 ./scripts/setup/bootstrap.sh
 ```
 
-- Docker install is skipped by default; set `INSTALL_DOCKER=1` to enable it.
-- Reboot once the script finishes so Docker group membership applies.
-- Confirm everything with:
+After the script completes, confirm everything is configured correctly:
 
-  ```bash
-  ./scripts/setup/verify.sh
-  ```
+```bash
+./scripts/setup/verify.sh
+```
 
 ### Initial Pi Configuration
 
@@ -88,18 +86,13 @@ Run the bootstrap script after cloning to a fresh Pi:
 2. **First Boot Setup:**
    ```bash
    ssh shaun@dashboard.local
-   
+
    # Update system
    sudo apt update && sudo apt upgrade -y
-   
+
    # Install essential packages
    sudo apt install -y git vim curl htop python3-pip unclutter xdotool
    sudo apt install -y python3-gpiozero python3-rpi.gpio
-   
-   # Install Docker
-   curl -fsSL https://get.docker.com -o get-docker.sh
-   sudo sh get-docker.sh
-   sudo usermod -aG docker $USER
    ```
 
 3. **Configure Auto-Login:**
@@ -191,12 +184,23 @@ ssh user@dashboard.local
 pkill chromium
 
 
-### Display Power Control
+### Display Power Control (Future Feature)
 
-- Toggle manually with `python3 scripts/display_control.py on` or `off`.
-- Check HDMI state with `python3 scripts/display_control.py status` (reports `on` or `off`).
-- Run a local schedule loop, e.g. `python3 scripts/display_control.py schedule --on-time 07:00 --off-time 22:30`, to keep the panel awake during the day and asleep overnight.
-- For a persistent schedule, register the command as a user service or cron job (example: `systemd-run --user --unit display-schedule --on-calendar="*-*-* 07:00" python3 /home/pi/dashboard-project/scripts/display_control.py on`).
+The `display_control.py` script is available for managing HDMI display power:
+
+```bash
+# Turn display on/off manually
+python3 scripts/display_control.py on
+python3 scripts/display_control.py off
+
+# Check current power state
+python3 scripts/display_control.py status
+
+# Run on a schedule (e.g., on at 7am, off at 10pm)
+python3 scripts/display_control.py schedule --on-time 07:00 --off-time 22:00
+```
+
+This functionality is ready to use but not yet integrated into the automated setup. Future work will include systemd service or cron integration for persistent scheduling.
 
 
 ## Resources
