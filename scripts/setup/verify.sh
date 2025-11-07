@@ -67,6 +67,23 @@ check_kiosk_script() {
   fi
 }
 
+check_touchscreen_service() {
+  if [[ ! -f "${REPO_ROOT}/scripts/touchscreen-check.sh" ]]; then
+    issues+=("touchscreen-check.sh not found")
+    return
+  fi
+
+  if [[ ! -x "${REPO_ROOT}/scripts/touchscreen-check.sh" ]]; then
+    issues+=("touchscreen-check.sh is not executable")
+  fi
+
+  if systemctl is-enabled touchscreen-check.service >/dev/null 2>&1; then
+    log "touchscreen-check.service is enabled."
+  else
+    issues+=("touchscreen-check.service is not enabled; run bootstrap.sh or: sudo systemctl enable touchscreen-check.service")
+  fi
+}
+
 main() {
   log "Starting verification..."
   require_command chromium-browser
@@ -81,13 +98,14 @@ main() {
   require_python_module RPi.GPIO
   check_autostart
   check_kiosk_script
+  check_touchscreen_service
 
   if [[ ${#issues[@]} -eq 0 ]]; then
     log "All checks passed."
     exit 0
   fi
 
-  log "Encountered issues:" 
+  log "Encountered issues:"
   for issue in "${issues[@]}"; do
     echo " - ${issue}"
   done

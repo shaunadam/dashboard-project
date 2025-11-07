@@ -79,7 +79,35 @@ sync_autostart_entry() {
 
 make_scripts_executable() {
   chmod +x "${REPO_ROOT}/scripts/kiosk.sh"
+  chmod +x "${REPO_ROOT}/scripts/touchscreen-check.sh"
   chmod +x "${SCRIPT_DIR}/"*.sh
+}
+
+install_touchscreen_service() {
+  local service_template="${REPO_ROOT}/config/systemd/touchscreen-check.service"
+  local service_dest="/etc/systemd/system/touchscreen-check.service"
+
+  if [ ! -f "${service_template}" ]; then
+    log "WARNING: Touchscreen service template not found, skipping."
+    return
+  fi
+
+  log "Installing touchscreen check service..."
+
+  # Render template with actual repo path
+  local rendered
+  rendered="$(mktemp)"
+  sed "s#__REPO_ROOT__#${REPO_ROOT}#g" "${service_template}" > "${rendered}"
+
+  # Install to systemd
+  sudo install -m 644 "${rendered}" "${service_dest}"
+  rm -f "${rendered}"
+
+  # Reload systemd and enable service
+  sudo systemctl daemon-reload
+  sudo systemctl enable touchscreen-check.service
+
+  log "Touchscreen check service enabled"
 }
 
 main() {
@@ -87,6 +115,7 @@ main() {
   ensure_apt_packages
   install_docker
   sync_autostart_entry
+  install_touchscreen_service
   make_scripts_executable
   log "Bootstrap complete. Reboot may be required for group membership changes."
 }

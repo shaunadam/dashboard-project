@@ -5,8 +5,26 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 ## Hardware
 
 - **Raspberry Pi 4** (Model B)
-- **15" USB Touchscreen Display**
+- **15" USB Touchscreen Display** (ILITEK USB controller)
 - **MicroSD Card** (bootable system)
+
+### Touchscreen Cold Boot Issue
+
+The USB touchscreen requires a warm boot to initialize properly:
+- **Cold boot** (power cycle): Touchscreen USB controller doesn't enumerate in time
+- **Warm boot** (reboot): Touchscreen initializes correctly
+
+**Automatic Recovery:**
+The system includes `touchscreen-check.service` which:
+1. Waits 60 seconds after boot for hardware initialization
+2. Checks if touchscreen (222a:0001) is detected
+3. Performs ONE automatic reboot if missing (prevents infinite loops)
+4. After reboot, touchscreen works normally
+
+**What this means:**
+- First boot after power loss takes ~2-3 minutes (includes auto-reboot)
+- Normal reboots (`sudo reboot`) work immediately
+- No manual intervention required
 
 ### Operating System
 - **Raspberry Pi OS with Desktop** (64-bit)
@@ -44,15 +62,18 @@ A wall-mounted touchscreen dashboard for family chore management, integrated wit
 ```
 ~/dashboard-project/
 ├── scripts/
-│   ├── kiosk.sh             # Browser startup script
-│   ├── display_control.py   # HDMI display power control (future feature)
+│   ├── kiosk.sh                 # Browser startup script
+│   ├── touchscreen-check.sh     # Touchscreen detection and auto-reboot
+│   ├── display_control.py       # HDMI display power control (future feature)
 │   └── setup/
-│       ├── bootstrap.sh     # Automated provisioning script
-│       └── verify.sh        # Post-setup checks
+│       ├── bootstrap.sh         # Automated provisioning script
+│       └── verify.sh            # Post-setup checks
 ├── config/
-│   └── autostart/
-│       └── kiosk.desktop    # Autostart template
-└── README.md               # This file
+│   ├── autostart/
+│   │   └── kiosk.desktop        # Autostart template
+│   └── systemd/
+│       └── touchscreen-check.service  # Touchscreen auto-recovery service
+└── README.md                   # This file
 ```
 
 ## Installation & Setup
@@ -182,7 +203,25 @@ chmod +x scripts/kiosk.sh
 ```bash
 ssh user@dashboard.local
 pkill chromium
+```
 
+### Touchscreen Service Management
+
+The touchscreen auto-recovery service runs automatically on boot. To manage it manually:
+
+```bash
+# Check service status
+systemctl status touchscreen-check.service
+
+# View service logs
+journalctl -u touchscreen-check.service -f
+
+# Temporarily disable auto-reboot (e.g., for troubleshooting)
+sudo systemctl disable touchscreen-check.service
+
+# Re-enable auto-reboot
+sudo systemctl enable touchscreen-check.service
+```
 
 ### Display Power Control (Future Feature)
 

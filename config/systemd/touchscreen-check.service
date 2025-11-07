@@ -1,0 +1,15 @@
+[Unit]
+Description=Touchscreen Detection and Auto-Reboot Service
+Documentation=https://github.com/yourusername/dashboard-project
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=__REPO_ROOT__/scripts/touchscreen-check.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
