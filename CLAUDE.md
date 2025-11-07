@@ -8,7 +8,9 @@ A Raspberry Pi-based kiosk running a Chromium browser in fullscreen mode to disp
 
 **What's Working:**
 - `scripts/kiosk.sh` - Launches Chromium in kiosk mode on boot
+- `scripts/touchscreen-check.sh` - Automatic touchscreen recovery via soft reboot
 - `config/autostart/kiosk.desktop` - Template for autostart configuration
+- `config/systemd/touchscreen-check.service` - Systemd service for touchscreen auto-recovery
 - `scripts/setup/bootstrap.sh` - Automated provisioning script
 - `scripts/setup/verify.sh` - Post-setup verification script
 - `scripts/display_control.py` - HDMI display power control (future feature)
@@ -19,16 +21,19 @@ A Raspberry Pi-based kiosk running a Chromium browser in fullscreen mode to disp
 ```
 ~/dashboard-project/
 ├── scripts/
-│   ├── kiosk.sh             # Browser startup script (core functionality)
-│   ├── display_control.py   # Display power control (future use)
+│   ├── kiosk.sh                # Browser startup script (core functionality)
+│   ├── touchscreen-check.sh    # Touchscreen detection and auto-reboot logic
+│   ├── display_control.py      # Display power control (future use)
 │   └── setup/
-│       ├── bootstrap.sh     # Automated provisioning
-│       └── verify.sh        # Post-setup checks
+│       ├── bootstrap.sh        # Automated provisioning
+│       └── verify.sh           # Post-setup checks
 ├── config/
-│   └── autostart/
-│       └── kiosk.desktop    # Autostart template (uses __REPO_ROOT__ token)
-├── readme.md                # User-facing documentation
-└── CLAUDE.md               # This file
+│   ├── autostart/
+│   │   └── kiosk.desktop       # Autostart template (uses __REPO_ROOT__ token)
+│   └── systemd/
+│       └── touchscreen-check.service  # Systemd service template
+├── readme.md                   # User-facing documentation
+└── CLAUDE.md                  # This file
 ```
 
 ## Key Commands
@@ -50,6 +55,29 @@ A Raspberry Pi-based kiosk running a Chromium browser in fullscreen mode to disp
 # Stop kiosk mode (via SSH)
 pkill chromium
 ```
+
+### Touchscreen Service Management
+```bash
+# Check service status
+systemctl status touchscreen-check.service
+
+# View logs
+journalctl -u touchscreen-check.service -f
+
+# Disable/enable service
+sudo systemctl disable touchscreen-check.service
+sudo systemctl enable touchscreen-check.service
+
+# Manual test (not recommended - will reboot if touchscreen missing)
+./scripts/touchscreen-check.sh
+```
+
+**How It Works:**
+- Runs once at boot after 60-second hardware stabilization
+- Detects touchscreen via USB ID `222a:0001`
+- Uses flag file `/var/run/touchscreen-reboot-attempted` for boot loop protection
+- Flag persists across soft reboots but cleared on power cycles
+- Performs ONE automatic reboot if touchscreen missing, then stops
 
 ### Display Control (Future Feature)
 ```bash
@@ -114,7 +142,6 @@ python3 scripts/display_control.py schedule --on-time 07:00 --off-time 22:00
 
 ### Future Features Planned
 - Display power control (on/off scheduling)
-- Touchscreen verification on reboot
 - Additional automation as needed
 
 ### Bootstrap Recovery
