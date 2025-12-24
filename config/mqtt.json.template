@@ -1,0 +1,6 @@
+{
+  "broker": "__MQTT_BROKER__",
+  "port": 1883,
+  "username": "__MQTT_USERNAME__",
+  "password": "__MQTT_PASSWORD__"
+}

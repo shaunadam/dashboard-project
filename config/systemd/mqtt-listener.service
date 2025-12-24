@@ -1,0 +1,22 @@
+[Unit]
+Description=MQTT Display Control Listener
+Documentation=https://github.com/yourusername/dashboard-project
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 __REPO_ROOT__/scripts/mqtt_listener.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+User=shaun
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

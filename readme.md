@@ -40,22 +40,24 @@ The system includes `touchscreen-check.service` which:
 ### Python Libraries
 - `gpiozero` - GPIO sensor control
 - `RPi.GPIO` - Low-level GPIO access
+- `paho-mqtt` - MQTT client for Home Assistant integration
 
 ### Utilities
 - `unclutter` - Hides mouse cursor when idle
 - `xdotool` - Simulates keyboard/mouse input for automation
+- `onboard` - On-screen keyboard for touchscreen input
 - `vim`, `curl`, `htop` - Standard utilities
 
 ## Home Assistant Integration
 
 ### Infrastructure
 - **Home Assistant VM** running on Ubuntu Desktop (basement server, not dashboard)
-
-
+- **MQTT Broker** running on Home Assistant server for device communication
 
 ### Integrations
 - **Kids Chores Custom Integration** ([ad-ha/kidschores-ha](https://github.com/ad-ha/kidschores-ha))
 - **Kids Chores Dashboard** ([ccpk1/kidschores-ha-dashboard](https://github.com/ccpk1/kidschores-ha-dashboard))
+- **MQTT Display Control** - Turn dashboard display on/off via Home Assistant automations
 
 ## Project Structure
 
@@ -64,15 +66,19 @@ The system includes `touchscreen-check.service` which:
 ├── scripts/
 │   ├── kiosk.sh                 # Browser startup script
 │   ├── touchscreen-check.sh     # Touchscreen detection and auto-reboot
-│   ├── display_control.py       # HDMI display power control (future feature)
+│   ├── display_control.py       # HDMI display power control
+│   ├── mqtt_listener.py         # MQTT subscriber for display control
 │   └── setup/
 │       ├── bootstrap.sh         # Automated provisioning script
 │       └── verify.sh            # Post-setup checks
 ├── config/
 │   ├── autostart/
 │   │   └── kiosk.desktop        # Autostart template
-│   └── systemd/
-│       └── touchscreen-check.service  # Touchscreen auto-recovery service
+│   ├── systemd/
+│   │   ├── touchscreen-check.service  # Touchscreen auto-recovery service
+│   │   └── mqtt-listener.service      # MQTT display control service
+│   ├── mqtt.json.template       # MQTT broker configuration template
+│   └── mqtt.json                # MQTT broker configuration (created by bootstrap)
 └── README.md                   # This file
 ```
 
@@ -138,11 +144,17 @@ The `scripts/kiosk.sh` launcher starts Chromium in fullscreen kiosk mode on boot
 ```bash
 #!/bin/bash
 
+# Set display environment variable
+export DISPLAY=:0
+
 # Wait for desktop to load
 sleep 10
 
 # Hide mouse cursor
 unclutter -idle 0.1 &
+
+# Start on-screen keyboard (auto-shows on text field focus)
+GDK_BACKEND=x11 onboard --size=800x300 &
 
 # Disable screen blanking
 xset s off
@@ -156,14 +168,22 @@ chromium-browser \
   --disable-session-crashed-bubble \
   --disable-restore-session-state \
   --disable-web-security \
+  --user-data-dir=/tmp/chromium-kiosk \
   --disable-features=TranslateUI \
   --no-first-run \
   --fast \
   --fast-start \
   --disable-default-apps \
+  --password-store=basic \
   --display=:0 \
   http://192.168.1.220:8123/your-dashboard-path
 ```
+
+**Key Features:**
+- `export DISPLAY=:0` - Sets display environment for X utilities (unclutter, xset)
+- `--password-store=basic` - Prevents keyring password prompts on boot
+- `--user-data-dir=/tmp/chromium-kiosk` - Required when disabling web security
+- `GDK_BACKEND=x11 onboard` - Forces X11 mode for on-screen keyboard (Wayland compatibility)
 
 **Autostart Configuration:** (handled automatically by `scripts/setup/bootstrap.sh`)
 ```bash
@@ -223,23 +243,137 @@ sudo systemctl disable touchscreen-check.service
 sudo systemctl enable touchscreen-check.service
 ```
 
-### Display Power Control (Future Feature)
+### MQTT Display Control
 
-The `display_control.py` script is available for managing HDMI display power:
+The dashboard integrates with Home Assistant via MQTT for remote display power management.
+
+#### MQTT Topics
+
+The `mqtt-listener.service` subscribes and publishes to these topics:
+
+- **Command Topic** (subscribe): `dashboard/display/command`
+  - Accepts: `on`, `off`, `status`
+- **Status Topic** (publish): `dashboard/display/status`
+  - Publishes: `on`, `off`, `unknown`
+- **Availability Topic** (publish): `dashboard/display/availability`
+  - Publishes: `online`, `offline`
+
+#### Service Management
+
+```bash
+# Check service status
+systemctl status mqtt-listener.service
+
+# View logs
+journalctl -u mqtt-listener.service -f
+
+# Start/stop/restart service
+sudo systemctl start mqtt-listener.service
+sudo systemctl stop mqtt-listener.service
+sudo systemctl restart mqtt-listener.service
+```
+
+#### Manual Testing
+
+You can test MQTT commands directly using `mosquitto_pub` (from your Home Assistant server or any MQTT client):
+
+```bash
+# Turn display on
+mosquitto_pub -h <broker-ip> -u <username> -P <password> \
+  -t "dashboard/display/command" -m "on"
+
+# Turn display off
+mosquitto_pub -h <broker-ip> -u <username> -P <password> \
+  -t "dashboard/display/command" -m "off"
+
+# Request status update
+mosquitto_pub -h <broker-ip> -u <username> -P <password> \
+  -t "dashboard/display/command" -m "status"
+
+# Subscribe to status updates
+mosquitto_sub -h <broker-ip> -u <username> -P <password> \
+  -t "dashboard/display/status"
+```
+
+#### Home Assistant Automations
+
+**Example 1: Turn display on when motion detected**
+
+```yaml
+automation:
+  - alias: "Dashboard Display On - Motion Detected"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.living_room_motion
+        to: "on"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "dashboard/display/command"
+          payload: "on"
+```
+
+**Example 2: Turn display off at bedtime**
+
+```yaml
+automation:
+  - alias: "Dashboard Display Off - Bedtime"
+    trigger:
+      - platform: time
+        at: "22:00:00"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "dashboard/display/command"
+          payload: "off"
+```
+
+**Example 3: Turn display on in the morning**
+
+```yaml
+automation:
+  - alias: "Dashboard Display On - Morning"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday
+        state: "on"
+    action:
+      - service: mqtt.publish
+        data:
+          topic: "dashboard/display/command"
+          payload: "on"
+```
+
+**Example 4: Create MQTT sensor for display status**
+
+Add this to your `configuration.yaml` to track display status in Home Assistant:
+
+```yaml
+mqtt:
+  sensor:
+    - name: "Dashboard Display Status"
+      state_topic: "dashboard/display/status"
+      availability_topic: "dashboard/display/availability"
+      payload_available: "online"
+      payload_not_available: "offline"
+      icon: mdi:monitor
+```
+
+#### Manual Display Control
+
+You can also control the display directly on the Pi:
 
 ```bash
 # Turn display on/off manually
-python3 scripts/display_control.py on
-python3 scripts/display_control.py off
+python3 ~/dashboard-project/scripts/display_control.py on
+python3 ~/dashboard-project/scripts/display_control.py off
 
 # Check current power state
-python3 scripts/display_control.py status
-
-# Run on a schedule (e.g., on at 7am, off at 10pm)
-python3 scripts/display_control.py schedule --on-time 07:00 --off-time 22:00
+python3 ~/dashboard-project/scripts/display_control.py status
 ```
-
-This functionality is ready to use but not yet integrated into the automated setup. Future work will include systemd service or cron integration for persistent scheduling.
 
 
 ## Resources

@@ -84,11 +84,35 @@ check_touchscreen_service() {
   fi
 }
 
+check_mqtt_listener() {
+  if [[ ! -f "${REPO_ROOT}/scripts/mqtt_listener.py" ]]; then
+    issues+=("mqtt_listener.py not found")
+    return
+  fi
+
+  if [[ ! -x "${REPO_ROOT}/scripts/mqtt_listener.py" ]]; then
+    issues+=("mqtt_listener.py is not executable")
+  fi
+
+  if [[ ! -f "${REPO_ROOT}/config/mqtt.json" ]]; then
+    issues+=("mqtt.json config not found; run bootstrap.sh to configure MQTT")
+  else
+    log "mqtt.json configuration exists."
+  fi
+
+  if systemctl is-enabled mqtt-listener.service >/dev/null 2>&1; then
+    log "mqtt-listener.service is enabled."
+  else
+    issues+=("mqtt-listener.service is not enabled; run bootstrap.sh or: sudo systemctl enable mqtt-listener.service")
+  fi
+}
+
 main() {
   log "Starting verification..."
   require_command chromium-browser
   require_command unclutter
   require_command xdotool
+  require_command onboard
   require_command git
   require_command curl
   require_command htop
@@ -96,9 +120,11 @@ main() {
   check_docker
   require_python_module gpiozero
   require_python_module RPi.GPIO
+  require_python_module paho.mqtt.client
   check_autostart
   check_kiosk_script
   check_touchscreen_service
+  check_mqtt_listener
 
   if [[ ${#issues[@]} -eq 0 ]]; then
     log "All checks passed."
