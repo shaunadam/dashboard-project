@@ -86,32 +86,45 @@ apply_wifi_credentials() {
 
 # Staged recovery: try least-disruptive actions first, reboot as last resort.
 recover_network() {
-  # Stage 1: nmcli down/up cycle for existing connection
-  log_message "Recovery Stage 1: nmcli connection down/up cycle"
+  # Stage 1: Reconnect WiFi device (handles "user-disconnected" state)
+  # nmcli device disconnect marks device as manually disconnected —
+  # only nmcli device connect clears that flag
+  log_message "Recovery Stage 1: reconnecting wlan0 device"
+  sudo nmcli device connect wlan0 2>/dev/null || true
+  sleep 15
+  if check_network; then
+    log_message "Recovery Stage 1 succeeded: network restored after device reconnect"
+    return 0
+  fi
+
+  # Stage 2: Connection profile down/up cycle
+  log_message "Recovery Stage 2: nmcli connection down/up cycle"
   sudo nmcli connection down "$WIFI_SSID" 2>/dev/null || true
   sleep 2
   sudo nmcli connection up "$WIFI_SSID" 2>/dev/null || true
   sleep 15
   if check_network; then
-    log_message "Recovery Stage 1 succeeded: network restored after connection cycle"
+    log_message "Recovery Stage 2 succeeded: network restored after connection cycle"
     return 0
   fi
 
-  # Stage 2: Apply credentials from config and reconnect
-  log_message "Recovery Stage 2: applying WiFi credentials from config"
+  # Stage 3: Apply credentials from config and reconnect
+  log_message "Recovery Stage 3: applying WiFi credentials from config"
   apply_wifi_credentials 2>/dev/null || true
   sleep 15
   if check_network; then
-    log_message "Recovery Stage 2 succeeded: network restored after credential apply"
+    log_message "Recovery Stage 3 succeeded: network restored after credential apply"
     return 0
   fi
 
-  # Stage 3: Restart NetworkManager entirely
-  log_message "Recovery Stage 3: restarting NetworkManager"
+  # Stage 4: Restart NetworkManager entirely + reconnect device
+  log_message "Recovery Stage 4: restarting NetworkManager"
   sudo systemctl restart NetworkManager
+  sleep 10
+  sudo nmcli device connect wlan0 2>/dev/null || true
   sleep 15
   if check_network; then
-    log_message "Recovery Stage 3 succeeded: network restored after NetworkManager restart"
+    log_message "Recovery Stage 4 succeeded: network restored after NetworkManager restart"
     return 0
   fi
 
