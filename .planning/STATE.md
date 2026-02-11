@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-11)
 
 **Core value:** The dashboard must boot from cold power-on to showing the week planner page with working touchscreen and zero human intervention.
-**Current focus:** Phase 1 complete — ready for Phase 2 planning
+**Current focus:** Phase 2 in progress — Resilience & Watchdogs
 
 ## Current Position
 
-Phase: 1 of 3 (Centralized Configuration & Core Fixes) — COMPLETE
-Plan: 5/5 complete
-Status: Phase 1 complete, verified on Pi hardware
-Last activity: 2026-02-11 — Phase 1 approved by user
+Phase: 2 of 3 (Resilience & Watchdogs)
+Plan: 1/3 complete
+Status: Executing Phase 2 plans
+Last activity: 2026-02-11 — Completed 02-01 WiFi watchdog
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 3min
-- Total execution time: 0.22 hours
+- Total execution time: 0.27 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 5 | 13min | 3min |
+| 02 | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (3min), 01-03 (2min), 01-04 (2min), 01-05 (2min)
+- Last 5 plans: 01-02 (3min), 01-03 (2min), 01-04 (2min), 01-05 (2min), 02-01 (3min)
 - Trend: Stable/Improving
 
 *Updated after each plan completion*
@@ -60,6 +61,10 @@ Recent decisions affecting current work:
 - Config restore validates JSON structure and required keys before overwriting config.json (01-05)
 - Branch switch regenerates systemd service files to handle path differences between branches (01-05)
 - HA automation examples updated to use switch entity (auto-discovered) instead of mqtt.publish (01-05)
+- WiFi watchdog uses separate flag file from touchscreen (/var/run/wifi-reboot-attempted) to prevent coordination conflicts (02-01)
+- check_network returns success if ANY of 4 stages passes (optimistic, avoids false recovery triggers) (02-01)
+- Recovery ordered by disruption: nmcli cycle < credential apply < NM restart < reboot (02-01)
+- Signal file /tmp/wifi-recovered used for browser watchdog coordination after recovery (02-01)
 
 ### Pending Todos
 
@@ -75,5 +80,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Phase 1 complete — ready for Phase 2 planning
+Stopped at: Completed 02-01-PLAN.md (WiFi watchdog)
 Resume file: None
