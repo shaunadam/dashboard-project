@@ -1,0 +1,45 @@
+{
+  "dashboard": {
+    "url": "__DASHBOARD_URL__"
+  },
+  "mqtt": {
+    "broker": "__MQTT_BROKER__",
+    "port": __MQTT_PORT__,
+    "username": "__MQTT_USERNAME__",
+    "password": "__MQTT_PASSWORD__",
+    "client_id": "dashboard-display-pi",
+    "topics": {
+      "command": "dashboard/display/command",
+      "status": "dashboard/display/status",
+      "availability": "dashboard/display/availability"
+    },
+    "heartbeat_interval_seconds": 60
+  },
+  "display": {
+    "wayland_display": "wayland-0"
+  },
+  "touchscreen": {
+    "usb_device_id": "__TOUCHSCREEN_USB_ID__",
+    "detection_wait_seconds": 60
+  },
+  "kiosk": {
+    "desktop_load_wait_seconds": 10,
+    "onboard_size": "800x300",
+    "user_data_dir": "__CHROMIUM_USER_DATA_DIR__"
+  },
+  "wifi": {
+    "ssid": "__WIFI_SSID__",
+    "password": "__WIFI_PASSWORD__"
+  },
+  "home_assistant": {
+    "auth_method": "trusted_network"
+  },
+  "browser": {
+    "inactivity_timeout_seconds": 600,
+    "scheduled_reboot_interval_hours": 48
+  },
+  "system": {
+    "reboot_flag_file": "/var/run/touchscreen-reboot-attempted",
+    "log_tag_touchscreen": "touchscreen-check"
+  }
+}

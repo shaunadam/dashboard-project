@@ -8,15 +8,19 @@ Assumes your running service already publishes:
   availability: dashboard/display/availability  (online|offline)
   status:       dashboard/display/status         (on|off|unknown)
 
-Reads broker settings from: ~/dashboard-project/config/mqtt.json
-Fields expected: {"broker":"...", "port":1883, "username":"...", "password":"...", "tls": false}
-TLS is optional; if tls=true and cafile provided, it will load it.
+Reads broker settings from config.json via lib/config.py.
 """
 
 import json
 import sys
 import time
 from pathlib import Path
+
+# Add repo root to sys.path so lib.config is importable.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from lib.config import get, require
 
 try:
     import paho.mqtt.client as mqtt
@@ -33,25 +37,10 @@ MANUFACTURER = "Raspberry Pi"
 UNIQUE_SWITCH = "dashboard_display_switch"
 UNIQUE_BUTTON = "dashboard_display_status_button"
 
-# Topics used by your listener
-TOPIC_COMMAND = "dashboard/display/command"
-TOPIC_STATUS = "dashboard/display/status"
-TOPIC_AVAIL = "dashboard/display/availability"
-
-# Config path (same as your listener)
-CONFIG_FILE = Path.home() / "dashboard-project" / "config" / "mqtt.json"
-
-
-def load_cfg(path: Path) -> dict:
-    if not path.exists():
-        print(f"Config file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-    with open(path, "r") as f:
-        cfg = json.load(f)
-    if "broker" not in cfg or "port" not in cfg:
-        print("Config must contain at least: broker, port", file=sys.stderr)
-        sys.exit(1)
-    return cfg
+# Topics used by the listener (loaded from config).
+TOPIC_COMMAND = get("mqtt.topics.command", "dashboard/display/command")
+TOPIC_STATUS = get("mqtt.topics.status", "dashboard/display/status")
+TOPIC_AVAIL = get("mqtt.topics.availability", "dashboard/display/availability")
 
 
 def on_connect(client, userdata, flags, rc):
@@ -60,7 +49,11 @@ def on_connect(client, userdata, flags, rc):
 
 
 def main():
-    cfg = load_cfg(CONFIG_FILE)
+    # Load MQTT broker config from centralized config.json.
+    broker = require("mqtt.broker")
+    port = get("mqtt.port", 1883)
+    username = get("mqtt.username")
+    password = get("mqtt.password")
 
     # Prepare payloads
     device_block = {
@@ -103,20 +96,10 @@ def main():
     client.on_connect = on_connect
 
     # Auth
-    if "username" in cfg and cfg["username"]:
-        client.username_pw_set(cfg["username"], cfg.get("password", ""))
+    if username:
+        client.username_pw_set(username, password or "")
 
-    # TLS (optional)
-    if cfg.get("tls"):
-        import ssl
-        cafile = cfg.get("cafile")  # optional; if your broker uses public CA, you may omit
-        if cafile:
-            client.tls_set(ca_certs=cafile, certfile=cfg.get("certfile"), keyfile=cfg.get("keyfile"),
-                           tls_version=ssl.PROTOCOL_TLS_CLIENT)
-        else:
-            client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
-
-    client.connect(cfg["broker"], int(cfg["port"]), keepalive=30)
+    client.connect(broker, int(port), keepalive=30)
 
     client.loop_start()
 
@@ -137,7 +120,7 @@ def main():
     print("Published HA discovery for switch + button (retained).")
     print(f"- {topic_switch_cfg}")
     print(f"- {topic_button_cfg}")
-    print("If entities don’t appear, verify the MQTT integration discovery prefix and restart Home Assistant.")
+    print("If entities don't appear, verify the MQTT integration discovery prefix and restart Home Assistant.")
 
 
 if __name__ == "__main__":

@@ -2,12 +2,22 @@
 set -euo pipefail
 
 # Touchscreen Detection and Auto-Reboot Script
-# Checks for ILITEK touchscreen (222a:0001) after boot
-# Performs ONE automatic reboot if not detected to trigger warm-boot enumeration
+# Checks for touchscreen after boot and performs ONE automatic reboot
+# if not detected, to trigger warm-boot USB enumeration.
+# All configurable values are loaded from config.json via lib/config.sh.
 
-TOUCHSCREEN_ID="222a:0001"
-FLAG_FILE="/var/run/touchscreen-reboot-attempted"
-LOG_TAG="touchscreen-check"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$REPO_ROOT/lib/config.sh"
+
+# Load configuration
+TOUCHSCREEN_ID="$(cfg_require '.touchscreen.usb_device_id')"
+FLAG_FILE="$(cfg_get '.system.reboot_flag_file')"
+FLAG_FILE="${FLAG_FILE:-/var/run/touchscreen-reboot-attempted}"
+LOG_TAG="$(cfg_get '.system.log_tag_touchscreen')"
+LOG_TAG="${LOG_TAG:-touchscreen-check}"
+WAIT_TIME="$(cfg_get '.touchscreen.detection_wait_seconds')"
+WAIT_TIME="${WAIT_TIME:-60}"
 
 log_message() {
   logger -t "$LOG_TAG" "$1"
@@ -15,7 +25,6 @@ log_message() {
 }
 
 # Wait for system to fully stabilize
-WAIT_TIME=60
 log_message "Waiting ${WAIT_TIME} seconds for system and hardware initialization..."
 sleep "$WAIT_TIME"
 
