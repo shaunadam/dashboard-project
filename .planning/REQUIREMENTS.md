@@ -100,46 +100,46 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CFG-01 | — | Pending |
-| CFG-02 | — | Pending |
-| CFG-03 | — | Pending |
-| CFG-04 | — | Pending |
-| CFG-05 | — | Pending |
-| CFG-06 | — | Pending |
-| CFG-07 | — | Pending |
-| CFG-08 | — | Pending |
-| CFG-09 | — | Pending |
-| CFG-10 | — | Pending |
-| CFG-11 | — | Pending |
-| CFG-12 | — | Pending |
-| NET-01 | — | Pending |
-| NET-02 | — | Pending |
-| NET-03 | — | Pending |
-| NET-04 | — | Pending |
-| NET-05 | — | Pending |
-| NET-06 | — | Pending |
-| BRW-01 | — | Pending |
-| BRW-02 | — | Pending |
-| BRW-03 | — | Pending |
-| BRW-04 | — | Pending |
-| BRW-05 | — | Pending |
-| MQTT-01 | — | Pending |
-| MQTT-02 | — | Pending |
-| MQTT-03 | — | Pending |
-| MQTT-04 | — | Pending |
-| CLN-01 | — | Pending |
-| CLN-02 | — | Pending |
-| CLN-03 | — | Pending |
-| CLN-04 | — | Pending |
-| TST-01 | — | Pending |
-| TST-02 | — | Pending |
-| TST-03 | — | Pending |
+| CFG-01 | Phase 1 | Pending |
+| CFG-02 | Phase 1 | Pending |
+| CFG-03 | Phase 1 | Pending |
+| CFG-04 | Phase 1 | Pending |
+| CFG-05 | Phase 1 | Pending |
+| CFG-06 | Phase 1 | Pending |
+| CFG-07 | Phase 1 | Pending |
+| CFG-08 | Phase 1 | Pending |
+| CFG-09 | Phase 1 | Pending |
+| CFG-10 | Phase 1 | Pending |
+| CFG-11 | Phase 1 | Pending |
+| CFG-12 | Phase 1 | Pending |
+| NET-01 | Phase 2 | Pending |
+| NET-02 | Phase 2 | Pending |
+| NET-03 | Phase 2 | Pending |
+| NET-04 | Phase 2 | Pending |
+| NET-05 | Phase 2 | Pending |
+| NET-06 | Phase 2 | Pending |
+| BRW-01 | Phase 2 | Pending |
+| BRW-02 | Phase 2 | Pending |
+| BRW-03 | Phase 2 | Pending |
+| BRW-04 | Phase 2 | Pending |
+| BRW-05 | Phase 2 | Pending |
+| MQTT-01 | Phase 1 | Pending |
+| MQTT-02 | Phase 1 | Pending |
+| MQTT-03 | Phase 1 | Pending |
+| MQTT-04 | Phase 1 | Pending |
+| CLN-01 | Phase 3 | Pending |
+| CLN-02 | Phase 3 | Pending |
+| CLN-03 | Phase 1 | Pending |
+| CLN-04 | Phase 1 | Pending |
+| TST-01 | Phase 3 | Pending |
+| TST-02 | Phase 3 | Pending |
+| TST-03 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 33 total
-- Mapped to phases: 0
-- Unmapped: 33
+- v1 requirements: 34 total
+- Mapped to phases: 34
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after initial definition*
+*Last updated: 2026-02-11 after roadmap creation*
