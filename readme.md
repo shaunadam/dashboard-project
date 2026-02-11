@@ -63,23 +63,24 @@ The system includes `touchscreen-check.service` which:
 
 ```
 ~/dashboard-project/
-├── scripts/
-│   ├── kiosk.sh                 # Browser startup script
-│   ├── touchscreen-check.sh     # Touchscreen detection and auto-reboot
-│   ├── display_control.py       # HDMI display power control
-│   ├── mqtt_listener.py         # MQTT subscriber for display control
-│   └── setup/
-│       ├── bootstrap.sh         # Automated provisioning script
-│       └── verify.sh            # Post-setup checks
-├── config/
-│   ├── autostart/
-│   │   └── kiosk.desktop        # Autostart template
-│   ├── systemd/
-│   │   ├── touchscreen-check.service  # Touchscreen auto-recovery service
-│   │   └── mqtt-listener.service      # MQTT display control service
-│   ├── mqtt.json.template       # MQTT broker configuration template
-│   └── mqtt.json                # MQTT broker configuration (created by bootstrap)
-└── README.md                   # This file
+├── config.json.template        # Config template with __TOKEN__ placeholders
+├── config.json                 # Centralized config (git-ignored, created by bootstrap)
+├── lib/
+│   ├── config.sh               # Bash config loader (cfg_get, cfg_require)
+│   └── config.py               # Python config loader (get, require)
+├── kiosk/
+│   └── kiosk.sh                # Browser startup script
+├── display/
+│   └── display_control.py      # HDMI display power control
+├── mqtt/
+│   ├── mqtt_listener.py        # MQTT subscriber for display control
+│   └── ha_init.py              # MQTT auto-discovery for Home Assistant
+├── touchscreen/
+│   └── touchscreen-check.sh    # Touchscreen detection and auto-reboot
+├── setup/
+│   ├── bootstrap.sh            # Automated provisioning script
+│   └── verify.sh               # Post-setup checks
+└── readme.md                   # This file
 ```
 
 ## Installation & Setup
@@ -89,13 +90,13 @@ The system includes `touchscreen-check.service` which:
 Run the bootstrap script after cloning to a fresh Pi:
 
 ```bash
-./scripts/setup/bootstrap.sh
+./setup/bootstrap.sh
 ```
 
 After the script completes, confirm everything is configured correctly:
 
 ```bash
-./scripts/setup/verify.sh
+./setup/verify.sh
 ```
 
 ### Initial Pi Configuration
@@ -138,7 +139,7 @@ After the script completes, confirm everything is configured correctly:
 
 ### Kiosk Mode Setup
 
-The `scripts/kiosk.sh` launcher starts Chromium in fullscreen kiosk mode on boot.
+The `kiosk/kiosk.sh` launcher starts Chromium in fullscreen kiosk mode on boot.
 
 **kiosk.sh Configuration:**
 ```bash
@@ -185,7 +186,7 @@ chromium-browser \
 - `--user-data-dir=/tmp/chromium-kiosk` - Required when disabling web security
 - `GDK_BACKEND=x11 onboard` - Forces X11 mode for on-screen keyboard (Wayland compatibility)
 
-**Autostart Configuration:** (handled automatically by `scripts/setup/bootstrap.sh`)
+**Autostart Configuration:** (handled automatically by `setup/bootstrap.sh`)
 ```bash
 # Create autostart directory
 mkdir -p ~/.config/autostart
@@ -195,7 +196,7 @@ cat > ~/.config/autostart/kiosk.desktop << EOF
 [Desktop Entry]
 Type=Application
 Name=Kiosk
-Exec=/home/shaun/dashboard-project/scripts/kiosk.sh
+Exec=/home/shaun/dashboard-project/kiosk/kiosk.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
@@ -204,7 +205,7 @@ EOF
 
 **Make script executable:** (the bootstrap script runs this step)
 ```bash
-chmod +x scripts/kiosk.sh
+chmod +x kiosk/kiosk.sh
 ```
 
 ## Usage
@@ -216,7 +217,7 @@ chmod +x scripts/kiosk.sh
 
 **Manual Start:**
 ```bash
-./scripts/kiosk.sh
+./kiosk/kiosk.sh
 ```
 
 **Exit Kiosk Mode (via SSH):**
@@ -368,11 +369,11 @@ You can also control the display directly on the Pi:
 
 ```bash
 # Turn display on/off manually
-python3 ~/dashboard-project/scripts/display_control.py on
-python3 ~/dashboard-project/scripts/display_control.py off
+python3 ~/dashboard-project/display/display_control.py on
+python3 ~/dashboard-project/display/display_control.py off
 
 # Check current power state
-python3 ~/dashboard-project/scripts/display_control.py status
+python3 ~/dashboard-project/display/display_control.py status
 ```
 
 
