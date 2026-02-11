@@ -55,11 +55,12 @@ Plans:
   7. No "restore pages?" dialogs appear after crash or reboot
   8. Touch-drag scrolls vertically without text selection
   9. Watchdog services coordinate to avoid conflicts with touchscreen reboot mechanism
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 02-01: [TBD during planning]
-- [ ] 02-02: [TBD during planning]
+- [ ] 02-01-PLAN.md — WiFi watchdog script with multi-stage network validation and boot-loop protection
+- [ ] 02-02-PLAN.md — Kiosk hardening (touch flags, crash recovery, restart loop) + browser watchdog (idle return, WiFi reload)
+- [ ] 02-03-PLAN.md — Bootstrap/verify integration for all new services and Pi hardware verification
 
 ### Phase 3: Testing & Cleanup
 **Goal**: Comprehensive test coverage and clean codebase ready for long-term maintenance
@@ -85,5 +86,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Centralized Configuration & Core Fixes | 5/5 | ✓ Complete | 2026-02-11 |
-| 2. Resilience & Watchdogs | 0/TBD | Not started | - |
+| 2. Resilience & Watchdogs | 0/3 | Not started | - |
 | 3. Testing & Cleanup | 0/TBD | Not started | - |
