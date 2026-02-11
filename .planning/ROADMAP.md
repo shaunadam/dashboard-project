@@ -12,7 +12,7 @@ Transform a functional Raspberry Pi kiosk into a production-hardened 24/7 family
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Centralized Configuration & Core Fixes** - Config foundation plus broken display control and MQTT status
+- [x] **Phase 1: Centralized Configuration & Core Fixes** - Config foundation plus broken display control and MQTT status
 - [ ] **Phase 2: Resilience & Watchdogs** - WiFi watchdog, browser crash recovery, service coordination
 - [ ] **Phase 3: Testing & Cleanup** - Unit tests, integration tests, remove legacy code
 
@@ -35,11 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans in 3 waves
 
 Plans:
-- [ ] 01-01-PLAN.md — Directory restructure + centralized config schema + loader libraries
-- [ ] 01-02-PLAN.md — Migrate all scripts to load from centralized config + remove --disable-web-security
-- [ ] 01-03-PLAN.md — Display status fix + MQTT auto-discovery + heartbeat
-- [ ] 01-04-PLAN.md — Bootstrap and verify rewrite for new structure
-- [ ] 01-05-PLAN.md — Config backup/restore + branch-switch script + readme update + Pi verification
+- [x] 01-01-PLAN.md — Directory restructure + centralized config schema + loader libraries
+- [x] 01-02-PLAN.md — Migrate all scripts to load from centralized config + remove --disable-web-security
+- [x] 01-03-PLAN.md — Display status fix + MQTT auto-discovery + heartbeat
+- [x] 01-04-PLAN.md — Bootstrap and verify rewrite for new structure
+- [x] 01-05-PLAN.md — Config backup/restore + branch-switch script + readme update + Pi verification
 
 ### Phase 2: Resilience & Watchdogs
 **Goal**: Automated recovery from network failures and browser crashes with zero human intervention
@@ -84,6 +84,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Centralized Configuration & Core Fixes | 0/5 | Not started | - |
+| 1. Centralized Configuration & Core Fixes | 5/5 | ✓ Complete | 2026-02-11 |
 | 2. Resilience & Watchdogs | 0/TBD | Not started | - |
 | 3. Testing & Cleanup | 0/TBD | Not started | - |
