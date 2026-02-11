@@ -46,6 +46,15 @@ check_config() {
       issues+=("config.json missing required key: ${key}")
     fi
   done
+
+  # Check WiFi config keys (needed for watchdog)
+  local wifi_keys=(".wifi.ssid" ".wifi.password")
+  for key in "${wifi_keys[@]}"; do
+    if [[ "$(jq -r "${key} // empty" "${config}")" == "" ]]; then
+      issues+=("config.json missing WiFi key: ${key} (needed for watchdog)")
+    fi
+  done
+
   log "config.json validated."
 }
 
@@ -127,6 +136,44 @@ check_display_control() {
   log "display_control.py OK."
 }
 
+check_wifi_watchdog() {
+  if [[ ! -f "${REPO_ROOT}/watchdog/wifi-watchdog.sh" ]]; then
+    issues+=("wifi-watchdog.sh not found")
+    return
+  fi
+  if [[ ! -x "${REPO_ROOT}/watchdog/wifi-watchdog.sh" ]]; then
+    issues+=("wifi-watchdog.sh is not executable")
+  fi
+  if systemctl is-enabled wifi-watchdog.timer >/dev/null 2>&1; then
+    log "wifi-watchdog.timer is enabled."
+  else
+    issues+=("wifi-watchdog.timer is not enabled; run bootstrap.sh")
+  fi
+}
+
+check_browser_watchdog() {
+  if [[ ! -f "${REPO_ROOT}/watchdog/browser-watchdog.sh" ]]; then
+    issues+=("browser-watchdog.sh not found")
+    return
+  fi
+  if [[ ! -x "${REPO_ROOT}/watchdog/browser-watchdog.sh" ]]; then
+    issues+=("browser-watchdog.sh is not executable")
+  fi
+  if systemctl is-enabled browser-watchdog.service >/dev/null 2>&1; then
+    log "browser-watchdog.service is enabled."
+  else
+    issues+=("browser-watchdog.service is not enabled; run bootstrap.sh")
+  fi
+}
+
+check_scheduled_reboot() {
+  if systemctl is-enabled scheduled-reboot.timer >/dev/null 2>&1; then
+    log "scheduled-reboot.timer is enabled."
+  else
+    issues+=("scheduled-reboot.timer is not enabled; run bootstrap.sh")
+  fi
+}
+
 main() {
   log "Starting verification..."
   require_command chromium-browser
@@ -138,6 +185,7 @@ main() {
   require_command htop
   require_command python3
   require_command jq
+  require_command xprintidle
   require_python_module gpiozero
   require_python_module RPi.GPIO
   require_python_module paho.mqtt.client
@@ -148,6 +196,9 @@ main() {
   check_touchscreen_service
   check_mqtt_listener
   check_display_control
+  check_wifi_watchdog
+  check_browser_watchdog
+  check_scheduled_reboot
 
   if [[ ${#issues[@]} -eq 0 ]]; then
     log "All checks passed."
