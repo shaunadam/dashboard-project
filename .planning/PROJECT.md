@@ -73,7 +73,7 @@ The dashboard must boot from cold power-on to showing the week planner page with
 - **Pain points identified:** WiFi drops cause total lockout, touch-drag selects text instead of scrolling, family forgets to return to week planner, hardcoded values scattered across scripts
 - **Development workflow:** Develop on Windows laptop, push to git, pull on Pi, test on hardware. Unit tests run locally. No local hardware simulation.
 - **Organic growth:** Project started as debugging touchscreen issues, grew into functional kiosk. Code structure reflects this history — flat, pragmatic, but not organized for maintainability.
-- **KidChores:** Previously used third-party integration, now replaced with custom HA integration. References may still exist in codebase.
+- **KidChores:** Previously used third-party integration, now replaced with custom HA integration. References may still exist in codebase. Remove them.
 
 ## Constraints
 
