@@ -9,6 +9,7 @@ All configurable values (broker, credentials, topics) are loaded from config.jso
 via lib/config.py.
 """
 
+import json
 import logging
 import signal
 import subprocess
@@ -63,7 +64,7 @@ class DisplayMQTTClient:
         # Client identity.
         self.client_id = get("mqtt.client_id", "dashboard-display-pi")
 
-        # Heartbeat interval (read for Plan 03 to use; not implemented yet).
+        # Heartbeat interval for periodic availability re-publish.
         self.heartbeat_interval = get("mqtt.heartbeat_interval_seconds", 60)
 
         self.client: Optional[mqtt.Client] = None
@@ -94,10 +95,51 @@ class DisplayMQTTClient:
             # Publish availability
             client.publish(self.topic_availability, "online", qos=1, retain=True)
 
+            # Publish HA MQTT auto-discovery payload
+            self._publish_discovery()
+
             # Publish initial status
             self._publish_current_status()
         else:
             logger.error(f"Failed to connect, return code {rc}")
+
+    def _publish_discovery(self):
+        """Publish Home Assistant MQTT auto-discovery payload for display switch."""
+        discovery_topic = "homeassistant/switch/dashboard_display/config"
+        discovery_payload = {
+            "name": "Dashboard Display",
+            "unique_id": "dashboard_display_pi",
+            "command_topic": self.topic_command,
+            "state_topic": self.topic_status,
+            "availability_topic": self.topic_availability,
+            "payload_on": "on",
+            "payload_off": "off",
+            "state_on": "on",
+            "state_off": "off",
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "device": {
+                "identifiers": ["dashboard_pi_kiosk"],
+                "name": "Dashboard Pi",
+                "model": "Raspberry Pi 4",
+                "manufacturer": "Raspberry Pi Foundation",
+            },
+            "icon": "mdi:monitor",
+        }
+        if self.client and self.client.is_connected():
+            self.client.publish(
+                discovery_topic,
+                json.dumps(discovery_payload),
+                qos=1,
+                retain=True,
+            )
+            logger.info(f"Published HA discovery payload to {discovery_topic}")
+
+    def _publish_heartbeat(self):
+        """Publish periodic heartbeat to availability topic."""
+        if self.client and self.client.is_connected():
+            self.client.publish(self.topic_availability, "online", qos=1, retain=True)
+            logger.debug("Heartbeat published")
 
     def _on_disconnect(self, client, userdata, rc):
         """Callback when disconnected from broker"""
@@ -134,12 +176,15 @@ class DisplayMQTTClient:
             if result.returncode == 0:
                 logger.info(f"Command '{command}' executed successfully")
 
-                # For 'on' and 'off', publish the new status immediately
-                if command in ['on', 'off']:
-                    self._publish_status(command)
-                # For 'status', query and publish actual status
-                elif command == 'status':
-                    self._publish_current_status()
+                # Parse actual state from display_control.py output
+                # (outputs "Display is on/off/unknown" for all commands)
+                output = result.stdout.strip().lower()
+                if 'is on' in output:
+                    self._publish_status('on')
+                elif 'is off' in output:
+                    self._publish_status('off')
+                else:
+                    self._publish_status('unknown')
             else:
                 logger.error(f"Command failed: {result.stderr}")
 
@@ -221,9 +266,14 @@ class DisplayMQTTClient:
         # Start the network loop
         self.client.loop_start()
 
-        # Keep running until shutdown signal
+        # Keep running until shutdown signal, with periodic heartbeat
+        last_heartbeat = time.time()
         try:
             while self.should_run:
+                now = time.time()
+                if now - last_heartbeat >= self.heartbeat_interval:
+                    self._publish_heartbeat()
+                    last_heartbeat = now
                 time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received")
