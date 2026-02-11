@@ -17,6 +17,7 @@ APT_PACKAGES=(
   python3-rpi.gpio
   chromium-browser
   onboard
+  xprintidle
 )
 
 log() {
@@ -194,9 +195,89 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 EOF
 
+  # WiFi watchdog timer
+  sudo tee /etc/systemd/system/wifi-watchdog.timer > /dev/null << EOF
+[Unit]
+Description=WiFi Watchdog Timer
+After=touchscreen-check.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  # WiFi watchdog service
+  sudo tee /etc/systemd/system/wifi-watchdog.service > /dev/null << EOF
+[Unit]
+Description=WiFi Watchdog Check
+After=network-online.target touchscreen-check.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${REPO_ROOT}/watchdog/wifi-watchdog.sh
+StandardOutput=journal
+StandardError=journal
+EOF
+
+  # Browser watchdog service
+  sudo tee /etc/systemd/system/browser-watchdog.service > /dev/null << EOF
+[Unit]
+Description=Browser Idle Watchdog
+After=graphical.target touchscreen-check.service
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=${REPO_ROOT}/watchdog/browser-watchdog.sh
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+StandardOutput=journal
+StandardError=journal
+User=${USER}
+Environment=DISPLAY=:0
+EOF
+
+  # Scheduled reboot timer
+  local reboot_hours
+  reboot_hours=$(jq -r '.browser.scheduled_reboot_interval_hours // 48' "${REPO_ROOT}/config.json" 2>/dev/null || echo "48")
+
+  sudo tee /etc/systemd/system/scheduled-reboot.timer > /dev/null << EOF
+[Unit]
+Description=Scheduled Soft Reboot Timer
+
+[Timer]
+OnBootSec=${reboot_hours}h
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  # Scheduled reboot service
+  sudo tee /etc/systemd/system/scheduled-reboot.service > /dev/null << EOF
+[Unit]
+Description=Scheduled Soft Reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reboot
+StandardOutput=journal
+StandardError=journal
+EOF
+
   sudo systemctl daemon-reload
   sudo systemctl enable touchscreen-check.service
   sudo systemctl enable mqtt-listener.service
+  sudo systemctl enable wifi-watchdog.timer
+  sudo systemctl enable browser-watchdog.service
+  sudo systemctl enable scheduled-reboot.timer
   log "Systemd services installed and enabled"
 }
 
@@ -205,6 +286,8 @@ make_scripts_executable() {
   chmod +x "${REPO_ROOT}/touchscreen/touchscreen-check.sh"
   chmod +x "${REPO_ROOT}/mqtt/mqtt_listener.py"
   chmod +x "${REPO_ROOT}/display/display_control.py"
+  chmod +x "${REPO_ROOT}/watchdog/wifi-watchdog.sh"
+  chmod +x "${REPO_ROOT}/watchdog/browser-watchdog.sh"
   chmod +x "${SCRIPT_DIR}/"*.sh
 }
 
