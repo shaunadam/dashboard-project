@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 1 of 3 (Centralized Configuration & Core Fixes)
-Plan: 3 of 5 complete
+Plan: 4 of 5 complete
 Status: Executing
-Last activity: 2026-02-11 — Completed 01-03 (Display Status & MQTT Discovery)
+Last activity: 2026-02-11 — Completed 01-04 (Bootstrap & Verify Rewrite)
 
-Progress: [██████░░░░] 20%
+Progress: [████████░░] 27%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 3min
-- Total execution time: 0.15 hours
+- Total execution time: 0.18 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | 9min | 3min |
+| 01 | 4 | 11min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (3min), 01-03 (2min)
+- Last 5 plans: 01-01 (4min), 01-02 (3min), 01-03 (2min), 01-04 (2min)
 - Trend: Stable/Improving
 
 *Updated after each plan completion*
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 - Parse actual display state from wlopm output, not assumed command success (01-03)
 - Publish verified hardware state for on/off commands via consistent output parsing (01-03)
 - Discovery payload uses retain=True so HA discovers entity even after broker restart (01-03)
+- Generate systemd/autostart files programmatically from paths, no template files in repo (01-04)
+- Use jq for config.json generation to safely handle special characters in passwords (01-04)
+- Advanced config values use sensible defaults without prompting (01-04)
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 01-03-PLAN.md (Display Status & MQTT Discovery)
+Stopped at: Completed 01-04-PLAN.md (Bootstrap & Verify Rewrite)
 Resume file: None
