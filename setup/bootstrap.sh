@@ -10,7 +10,7 @@ APT_PACKAGES=(
   curl
   htop
   jq
-  python3-pip
+  python3-paho-mqtt
   unclutter
   xdotool
   python3-gpiozero
@@ -36,8 +36,7 @@ ensure_apt_packages() {
 }
 
 install_mqtt_dependencies() {
-  log "Installing MQTT client library (paho-mqtt)..."
-  pip3 install --user paho-mqtt
+  log "MQTT client library installed via apt (python3-paho-mqtt)."
 }
 
 configure_dashboard() {
