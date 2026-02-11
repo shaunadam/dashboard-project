@@ -27,5 +27,3 @@ Thumbs.db
 *.local
 config/mqtt.json
 
-# Planning docs (local-only)
-.planning/
