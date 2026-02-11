@@ -150,5 +150,7 @@ log_message "WARNING: Network check failed - all 4 stages returned failure"
 recover_network
 
 # If recovery succeeded (didn't reboot), signal browser to reload
+# Use world-writable permissions so browser-watchdog (running as user) can delete it
 touch /tmp/wifi-recovered
+chmod 666 /tmp/wifi-recovered
 log_message "Network recovered - signaled browser reload via /tmp/wifi-recovered"

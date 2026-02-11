@@ -36,7 +36,7 @@ while true; do
   # Check WiFi recovery signal
   if [ -f "$WIFI_RECOVERY_SIGNAL" ]; then
     log_message "WiFi recovery detected, reloading dashboard"
-    rm -f "$WIFI_RECOVERY_SIGNAL"
+    rm -f "$WIFI_RECOVERY_SIGNAL" 2>/dev/null || true
     DISPLAY=:0 xdotool key F5
     sleep 10  # Brief pause after reload
     continue
