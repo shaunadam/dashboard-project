@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 1 of 3 (Centralized Configuration & Core Fixes)
-Plan: 4 of 5 complete
-Status: Executing
-Last activity: 2026-02-11 — Completed 01-04 (Bootstrap & Verify Rewrite)
+Plan: 5 of 5 complete (Task 3 checkpoint pending human verification)
+Status: Checkpoint — awaiting Pi hardware verification
+Last activity: 2026-02-11 — Completed 01-05 Tasks 1-2 (Config Backup/Restore, Docs)
 
-Progress: [████████░░] 27%
+Progress: [██████████] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 3min
-- Total execution time: 0.18 hours
+- Total execution time: 0.22 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 4 | 11min | 3min |
+| 01 | 5 | 13min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (3min), 01-03 (2min), 01-04 (2min)
+- Last 5 plans: 01-01 (4min), 01-02 (3min), 01-03 (2min), 01-04 (2min), 01-05 (2min)
 - Trend: Stable/Improving
 
 *Updated after each plan completion*
@@ -57,6 +57,9 @@ Recent decisions affecting current work:
 - Generate systemd/autostart files programmatically from paths, no template files in repo (01-04)
 - Use jq for config.json generation to safely handle special characters in passwords (01-04)
 - Advanced config values use sensible defaults without prompting (01-04)
+- Config restore validates JSON structure and required keys before overwriting config.json (01-05)
+- Branch switch regenerates systemd service files to handle path differences between branches (01-05)
+- HA automation examples updated to use switch entity (auto-discovered) instead of mqtt.publish (01-05)
 
 ### Pending Todos
 
@@ -72,5 +75,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 01-04-PLAN.md (Bootstrap & Verify Rewrite)
+Stopped at: 01-05-PLAN.md Task 3 checkpoint (awaiting Pi hardware verification)
 Resume file: None
