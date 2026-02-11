@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 2 of 3 (Resilience & Watchdogs)
-Plan: 1/3 complete
+Plan: 2/3 complete
 Status: Executing Phase 2 plans
-Last activity: 2026-02-11 — Completed 02-01 WiFi watchdog
+Last activity: 2026-02-11 — Completed 02-02 Browser kiosk hardening
 
-Progress: [████░░░░░░] 40%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3min
-- Total execution time: 0.27 hours
+- Total plans completed: 7
+- Average duration: 2min
+- Total execution time: 0.30 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 5 | 13min | 3min |
-| 02 | 1 | 3min | 3min |
+| 02 | 2 | 5min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (3min), 01-03 (2min), 01-04 (2min), 01-05 (2min), 02-01 (3min)
+- Last 5 plans: 01-03 (2min), 01-04 (2min), 01-05 (2min), 02-01 (3min), 02-02 (2min)
 - Trend: Stable/Improving
 
 *Updated after each plan completion*
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - check_network returns success if ANY of 4 stages passes (optimistic, avoids false recovery triggers) (02-01)
 - Recovery ordered by disruption: nmcli cycle < credential apply < NM restart < reboot (02-01)
 - Signal file /tmp/wifi-recovered used for browser watchdog coordination after recovery (02-01)
+- F5 reload for idle auto-return rather than URL navigation (simpler, sufficient for HA dashboards) (02-02)
+- Restart loop in kiosk.sh rather than systemd service supervision (avoids X11 session complexity) (02-02)
+- Chromium flags-first approach for touch scrolling (--disable-touch-drag-drop, --disable-pinch) (02-02)
 
 ### Pending Todos
 
@@ -80,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 02-01-PLAN.md (WiFi watchdog)
+Stopped at: Completed 02-02-PLAN.md (Browser kiosk hardening)
 Resume file: None
