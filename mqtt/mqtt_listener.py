@@ -5,13 +5,10 @@ MQTT Listener for Display Control
 Subscribes to MQTT topics to control the HDMI display and publishes status updates.
 Designed to run as a systemd service for continuous operation.
 
-Topics:
-  - dashboard/display/command (subscribe): Receives "on", "off", "status" commands
-  - dashboard/display/status (publish): Current state "on", "off", "unknown"
-  - dashboard/display/availability (publish): "online" or "offline"
+All configurable values (broker, credentials, topics) are loaded from config.json
+via lib/config.py.
 """
 
-import json
 import logging
 import signal
 import subprocess
@@ -20,21 +17,20 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Add repo root to sys.path so lib.config is importable.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from lib.config import get, require
+
 try:
     import paho.mqtt.client as mqtt
 except ImportError:
     print("Error: paho-mqtt not installed. Run: pip3 install paho-mqtt", file=sys.stderr)
     sys.exit(1)
 
-
-# Configuration
-CONFIG_FILE = Path.home() / "dashboard-project" / "config" / "mqtt.json"
-DISPLAY_CONTROL_SCRIPT = Path.home() / "dashboard-project" / "scripts" / "display_control.py"
-
-# MQTT Topics
-TOPIC_COMMAND = "dashboard/display/command"
-TOPIC_STATUS = "dashboard/display/status"
-TOPIC_AVAILABILITY = "dashboard/display/availability"
+# Display control script path (resolved from repo root).
+DISPLAY_CONTROL_SCRIPT = REPO_ROOT / "display" / "display_control.py"
 
 # Logging setup
 logging.basicConfig(
@@ -50,32 +46,29 @@ logger = logging.getLogger("mqtt_listener")
 class DisplayMQTTClient:
     """Manages MQTT connection and display control"""
 
-    def __init__(self, config_path: Path):
-        self.config = self._load_config(config_path)
+    def __init__(self):
+        # Load all MQTT settings from centralized config.
+        self.mqtt_config = {
+            "broker": require("mqtt.broker"),
+            "port": get("mqtt.port", 1883),
+            "username": get("mqtt.username"),
+            "password": get("mqtt.password"),
+        }
+
+        # Load MQTT topics from config (with sensible defaults).
+        self.topic_command = get("mqtt.topics.command", "dashboard/display/command")
+        self.topic_status = get("mqtt.topics.status", "dashboard/display/status")
+        self.topic_availability = get("mqtt.topics.availability", "dashboard/display/availability")
+
+        # Client identity.
+        self.client_id = get("mqtt.client_id", "dashboard-display-pi")
+
+        # Heartbeat interval (read for Plan 03 to use; not implemented yet).
+        self.heartbeat_interval = get("mqtt.heartbeat_interval_seconds", 60)
+
         self.client: Optional[mqtt.Client] = None
         self.should_run = True
         self._setup_signal_handlers()
-
-    def _load_config(self, config_path: Path) -> dict:
-        """Load MQTT configuration from JSON file"""
-        if not config_path.exists():
-            logger.error(f"Config file not found: {config_path}")
-            logger.error("Create config file with: broker, port, username, password")
-            sys.exit(1)
-
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-
-            # Validate required fields
-            required = ['broker', 'port']
-            if not all(k in config for k in required):
-                raise ValueError(f"Config must contain: {required}")
-
-            return config
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Invalid config file: {e}")
-            sys.exit(1)
 
     def _setup_signal_handlers(self):
         """Handle graceful shutdown on SIGTERM/SIGINT"""
@@ -95,11 +88,11 @@ class DisplayMQTTClient:
         if rc == 0:
             logger.info("Connected to MQTT broker")
             # Subscribe to command topic
-            client.subscribe(TOPIC_COMMAND)
-            logger.info(f"Subscribed to {TOPIC_COMMAND}")
+            client.subscribe(self.topic_command)
+            logger.info(f"Subscribed to {self.topic_command}")
 
             # Publish availability
-            client.publish(TOPIC_AVAILABILITY, "online", qos=1, retain=True)
+            client.publish(self.topic_availability, "online", qos=1, retain=True)
 
             # Publish initial status
             self._publish_current_status()
@@ -160,7 +153,7 @@ class DisplayMQTTClient:
     def _publish_status(self, status: str):
         """Publish display status to MQTT"""
         if self.client and self.client.is_connected():
-            self.client.publish(TOPIC_STATUS, status, qos=1, retain=True)
+            self.client.publish(self.topic_status, status, qos=1, retain=True)
             logger.info(f"Published status: {status}")
 
     def _publish_current_status(self):
@@ -195,7 +188,7 @@ class DisplayMQTTClient:
     def run(self):
         """Main loop - connect to broker and start listening"""
         # Initialize MQTT client
-        self.client = mqtt.Client(client_id="dashboard-display-pi", clean_session=False)
+        self.client = mqtt.Client(client_id=self.client_id, clean_session=False)
 
         # Set up callbacks
         self.client.on_connect = self._on_connect
@@ -203,22 +196,22 @@ class DisplayMQTTClient:
         self.client.on_message = self._on_message
 
         # Set Last Will and Testament (sent when client disconnects unexpectedly)
-        self.client.will_set(TOPIC_AVAILABILITY, "offline", qos=1, retain=True)
+        self.client.will_set(self.topic_availability, "offline", qos=1, retain=True)
 
         # Set username/password if provided
-        if 'username' in self.config and 'password' in self.config:
+        if self.mqtt_config.get('username') and self.mqtt_config.get('password'):
             self.client.username_pw_set(
-                self.config['username'],
-                self.config.get('password', '')
+                self.mqtt_config['username'],
+                self.mqtt_config.get('password', '')
             )
 
         # Connect to broker
-        logger.info(f"Connecting to MQTT broker at {self.config['broker']}:{self.config['port']}")
+        logger.info(f"Connecting to MQTT broker at {self.mqtt_config['broker']}:{self.mqtt_config['port']}")
 
         try:
             self.client.connect(
-                self.config['broker'],
-                self.config['port'],
+                self.mqtt_config['broker'],
+                self.mqtt_config['port'],
                 keepalive=60
             )
         except Exception as e:
@@ -237,7 +230,7 @@ class DisplayMQTTClient:
         finally:
             # Clean shutdown
             if self.client:
-                self.client.publish(TOPIC_AVAILABILITY, "offline", qos=1, retain=True)
+                self.client.publish(self.topic_availability, "offline", qos=1, retain=True)
                 self.client.loop_stop()
                 self.client.disconnect()
             logger.info("Shutdown complete")
@@ -253,7 +246,7 @@ def main():
         sys.exit(1)
 
     # Create and run client
-    client = DisplayMQTTClient(CONFIG_FILE)
+    client = DisplayMQTTClient()
     client.run()
 
 

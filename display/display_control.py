@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""Minimal HDMI display power control using wlopm."""
+"""Minimal HDMI display power control using wlopm.
+
+All configurable values are loaded from config.json via lib/config.py.
+"""
 
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-WAYLAND_DISPLAY = "wayland-0"
+# Add repo root to sys.path so lib.config is importable.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from lib.config import get
+
+WAYLAND_DISPLAY = get("display.wayland_display", "wayland-0")
 XDG_RUNTIME_DIR = f"/run/user/{os.getuid()}"
 
 
