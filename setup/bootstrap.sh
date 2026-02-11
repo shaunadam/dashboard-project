@@ -242,6 +242,9 @@ StandardOutput=journal
 StandardError=journal
 User=${USER}
 Environment=DISPLAY=:0
+
+[Install]
+WantedBy=graphical.target
 EOF
 
   # Scheduled reboot timer
