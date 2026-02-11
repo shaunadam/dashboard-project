@@ -2,14 +2,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-AUTOSTART_DEST="${HOME}/.config/autostart/kiosk.desktop"
-AUTOSTART_TEMPLATE="${REPO_ROOT}/config/autostart/kiosk.desktop"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 APT_PACKAGES=(
   git
   vim
   curl
   htop
+  jq
   python3-pip
   unclutter
   xdotool
@@ -35,108 +35,30 @@ ensure_apt_packages() {
   sudo apt-get install -y "${APT_PACKAGES[@]}"
 }
 
-install_docker() {
-  local install_docker_flag
-  install_docker_flag=${INSTALL_DOCKER:-0}
-
-  if [[ "${install_docker_flag}" != "1" ]]; then
-    log "Skipping Docker installation (INSTALL_DOCKER=${install_docker_flag})."
-    return
-  fi
-
-  if command -v docker >/dev/null 2>&1; then
-    log "Docker already installed; skipping."
-  else
-    log "Installing Docker via convenience script..."
-    local tmp_script
-    tmp_script="$(mktemp)"
-    curl -fsSL https://get.docker.com -o "${tmp_script}"
-    sudo sh "${tmp_script}"
-    rm -f "${tmp_script}"
-  fi
-
-  if command -v usermod >/dev/null 2>&1; then
-    log "Ensuring ${USER} belongs to docker group..."
-    sudo usermod -aG docker "${USER}"
-  fi
-}
-
-sync_autostart_entry() {
-  mkdir -p "$(dirname "${AUTOSTART_DEST}")"
-
-  local rendered
-  rendered="$(mktemp)"
-  sed "s#__REPO_ROOT__#${REPO_ROOT}#g" "${AUTOSTART_TEMPLATE}" > "${rendered}"
-
-  if cmp -s "${rendered}" "${AUTOSTART_DEST}" 2>/dev/null; then
-    rm -f "${rendered}"
-    log "Autostart entry already up to date."
-  else
-    log "Installing autostart entry to ${AUTOSTART_DEST}..."
-    install -m 644 "${rendered}" "${AUTOSTART_DEST}"
-  fi
-  rm -f "${rendered}"
-}
-
-make_scripts_executable() {
-  chmod +x "${REPO_ROOT}/scripts/kiosk.sh"
-  chmod +x "${REPO_ROOT}/scripts/touchscreen-check.sh"
-  chmod +x "${REPO_ROOT}/scripts/mqtt_listener.py"
-  chmod +x "${SCRIPT_DIR}/"*.sh
-}
-
-install_touchscreen_service() {
-  local service_template="${REPO_ROOT}/config/systemd/touchscreen-check.service"
-  local service_dest="/etc/systemd/system/touchscreen-check.service"
-
-  if [ ! -f "${service_template}" ]; then
-    log "WARNING: Touchscreen service template not found, skipping."
-    return
-  fi
-
-  log "Installing touchscreen check service..."
-
-  # Render template with actual repo path
-  local rendered
-  rendered="$(mktemp)"
-  sed "s#__REPO_ROOT__#${REPO_ROOT}#g" "${service_template}" > "${rendered}"
-
-  # Install to systemd
-  sudo install -m 644 "${rendered}" "${service_dest}"
-  rm -f "${rendered}"
-
-  # Reload systemd and enable service
-  sudo systemctl daemon-reload
-  sudo systemctl enable touchscreen-check.service
-
-  log "Touchscreen check service enabled"
-}
-
 install_mqtt_dependencies() {
   log "Installing MQTT client library (paho-mqtt)..."
- # pip3 install --user paho-mqtt
+  pip3 install --user paho-mqtt
 }
 
-configure_mqtt() {
-  local mqtt_config="${REPO_ROOT}/config/mqtt.json"
-  local mqtt_template="${REPO_ROOT}/config/mqtt.json.template"
+configure_dashboard() {
+  local config_file="${REPO_ROOT}/config.json"
 
-  if [ -f "${mqtt_config}" ]; then
-    log "MQTT config already exists at ${mqtt_config}, skipping configuration."
-    log "To reconfigure, delete ${mqtt_config} and re-run bootstrap."
-    return
-  fi
-
-  if [ ! -f "${mqtt_template}" ]; then
-    log "WARNING: MQTT config template not found, skipping MQTT configuration."
+  if [ -f "${config_file}" ]; then
+    log "Config already exists at ${config_file}, skipping configuration."
+    log "To reconfigure, delete ${config_file} and re-run bootstrap."
     return
   fi
 
   log ""
-  log "=== MQTT Configuration ==="
-  log "Enter your Home Assistant MQTT broker details:"
+  log "=== Dashboard Configuration ==="
+  log "Enter your configuration values (press Enter for defaults):"
   log ""
 
+  # Dashboard
+  read -rp "Dashboard URL [http://192.168.68.75:8123]: " dashboard_url
+  dashboard_url="${dashboard_url:-http://192.168.68.75:8123}"
+
+  # MQTT
   read -rp "MQTT Broker IP/hostname: " mqtt_broker
   read -rp "MQTT Port [1883]: " mqtt_port
   mqtt_port="${mqtt_port:-1883}"
@@ -144,56 +66,158 @@ configure_mqtt() {
   read -rsp "MQTT Password: " mqtt_password
   echo ""
 
-  # Render template
-  sed -e "s#__MQTT_BROKER__#${mqtt_broker}#g" \
-      -e "s#__MQTT_USERNAME__#${mqtt_username}#g" \
-      -e "s#__MQTT_PASSWORD__#${mqtt_password}#g" \
-      "${mqtt_template}" | \
-  sed "s#1883#${mqtt_port}#g" > "${mqtt_config}"
+  # Touchscreen
+  read -rp "Touchscreen USB ID [222a:0001]: " ts_usb_id
+  ts_usb_id="${ts_usb_id:-222a:0001}"
 
-  chmod 600 "${mqtt_config}"
-  log "MQTT configuration saved to ${mqtt_config}"
+  # Chromium
+  read -rp "Chromium user data dir [${HOME}/.config/chromium-kiosk]: " chromium_dir
+  chromium_dir="${chromium_dir:-${HOME}/.config/chromium-kiosk}"
+
+  # WiFi (for Phase 2 watchdog)
+  read -rp "WiFi SSID: " wifi_ssid
+  read -rsp "WiFi Password: " wifi_password
+  echo ""
+
+  # Generate config.json using jq for proper JSON escaping
+  jq -n \
+    --arg dashboard_url "$dashboard_url" \
+    --arg mqtt_broker "$mqtt_broker" \
+    --argjson mqtt_port "$mqtt_port" \
+    --arg mqtt_username "$mqtt_username" \
+    --arg mqtt_password "$mqtt_password" \
+    --arg ts_usb_id "$ts_usb_id" \
+    --arg chromium_dir "$chromium_dir" \
+    --arg wifi_ssid "$wifi_ssid" \
+    --arg wifi_password "$wifi_password" \
+    '{
+      dashboard: { url: $dashboard_url },
+      mqtt: {
+        broker: $mqtt_broker,
+        port: $mqtt_port,
+        username: $mqtt_username,
+        password: $mqtt_password,
+        client_id: "dashboard-display-pi",
+        topics: {
+          command: "dashboard/display/command",
+          status: "dashboard/display/status",
+          availability: "dashboard/display/availability"
+        },
+        heartbeat_interval_seconds: 60
+      },
+      display: { wayland_display: "wayland-0" },
+      touchscreen: {
+        usb_device_id: $ts_usb_id,
+        detection_wait_seconds: 60
+      },
+      kiosk: {
+        desktop_load_wait_seconds: 10,
+        onboard_size: "800x300",
+        user_data_dir: $chromium_dir
+      },
+      wifi: {
+        ssid: $wifi_ssid,
+        password: $wifi_password
+      },
+      home_assistant: {
+        auth_method: "trusted_network"
+      },
+      browser: {
+        inactivity_timeout_seconds: 600,
+        scheduled_reboot_interval_hours: 48
+      },
+      system: {
+        reboot_flag_file: "/var/run/touchscreen-reboot-attempted",
+        log_tag_touchscreen: "touchscreen-check"
+      }
+    }' > "${config_file}"
+
+  chmod 600 "${config_file}"
+  log "Configuration saved to ${config_file}"
 }
 
-install_mqtt_listener_service() {
-  local service_template="${REPO_ROOT}/config/systemd/mqtt-listener.service"
-  local service_dest="/etc/systemd/system/mqtt-listener.service"
+generate_autostart_entry() {
+  local dest="${HOME}/.config/autostart/kiosk.desktop"
+  mkdir -p "$(dirname "${dest}")"
 
-  if [ ! -f "${service_template}" ]; then
-    log "WARNING: MQTT listener service template not found, skipping."
-    return
-  fi
+  cat > "${dest}" << EOF
+[Desktop Entry]
+Type=Application
+Name=Kiosk
+Exec=${REPO_ROOT}/kiosk/kiosk.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
 
-  log "Installing MQTT listener service..."
+  log "Autostart entry installed to ${dest}"
+}
 
-  # Render template with actual repo path
-  local rendered
-  rendered="$(mktemp)"
-  sed "s#__REPO_ROOT__#${REPO_ROOT}#g" "${service_template}" > "${rendered}"
+generate_systemd_services() {
+  # Touchscreen check service
+  sudo tee /etc/systemd/system/touchscreen-check.service > /dev/null << EOF
+[Unit]
+Description=Touchscreen Detection and Auto-Reboot Service
+After=multi-user.target
+Wants=multi-user.target
 
-  # Install to systemd
-  sudo install -m 644 "${rendered}" "${service_dest}"
-  rm -f "${rendered}"
+[Service]
+Type=oneshot
+ExecStart=${REPO_ROOT}/touchscreen/touchscreen-check.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
 
-  # Reload systemd and enable service
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # MQTT listener service
+  sudo tee /etc/systemd/system/mqtt-listener.service > /dev/null << EOF
+[Unit]
+Description=MQTT Display Control Listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 ${REPO_ROOT}/mqtt/mqtt_listener.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+User=${USER}
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
   sudo systemctl daemon-reload
+  sudo systemctl enable touchscreen-check.service
   sudo systemctl enable mqtt-listener.service
+  log "Systemd services installed and enabled"
+}
 
-  log "MQTT listener service enabled"
-  log "Start it with: sudo systemctl start mqtt-listener.service"
+make_scripts_executable() {
+  chmod +x "${REPO_ROOT}/kiosk/kiosk.sh"
+  chmod +x "${REPO_ROOT}/touchscreen/touchscreen-check.sh"
+  chmod +x "${REPO_ROOT}/mqtt/mqtt_listener.py"
+  chmod +x "${REPO_ROOT}/display/display_control.py"
+  chmod +x "${SCRIPT_DIR}/"*.sh
 }
 
 main() {
-  log "Starting bootstrap tasks..."
+  log "Starting bootstrap..."
   ensure_apt_packages
-  install_docker
-  sync_autostart_entry
-  install_touchscreen_service
   install_mqtt_dependencies
-  configure_mqtt
-  install_mqtt_listener_service
+  configure_dashboard
+  generate_autostart_entry
+  generate_systemd_services
   make_scripts_executable
-  log "Bootstrap complete. Reboot may be required for group membership changes."
+  log "Bootstrap complete. Reboot recommended."
 }
 
 main "$@"
