@@ -31,6 +31,32 @@ def run_wlopm(state: str) -> None:
     )
 
 
+def get_status() -> str:
+    """Query actual display power state via wlopm."""
+    try:
+        result = subprocess.run(
+            ["wlopm"],
+            env={
+                "WAYLAND_DISPLAY": WAYLAND_DISPLAY,
+                "XDG_RUNTIME_DIR": XDG_RUNTIME_DIR,
+            },
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout.strip().lower()
+        # wlopm output format: "HDMI-A-1 on" or "HDMI-A-1 off"
+        # or similar per the connected display
+        if " on" in output:
+            return "on"
+        elif " off" in output:
+            return "off"
+        else:
+            return "unknown"
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+        return "unknown"
+
+
 def main() -> None:
     if len(sys.argv) != 2 or sys.argv[1] not in ("on", "off", "status"):
         print("Usage: display_control.py {on|off|status}", file=sys.stderr)
@@ -39,11 +65,14 @@ def main() -> None:
     command = sys.argv[1]
 
     if command == "status":
-        print("Status check not implemented yet")
+        status = get_status()
+        print(f"Display is {status}")
         sys.exit(0)
 
     run_wlopm(command)
-    print(f"Display turned {command}")
+    # Verify the actual state after command
+    actual = get_status()
+    print(f"Display is {actual}")
 
 
 if __name__ == "__main__":
