@@ -32,12 +32,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   7. MQTT discovery registers display entity with correct capabilities
   8. Chromium launches without security vulnerabilities (no --disable-web-security flag)
   9. Project files reorganized into logical directory structure (all new code goes in the right place from the start)
-**Plans**: TBD
+**Plans**: 5 plans in 3 waves
 
 Plans:
-- [ ] 01-01: [TBD during planning]
-- [ ] 01-02: [TBD during planning]
-- [ ] 01-03: [TBD during planning]
+- [ ] 01-01-PLAN.md — Directory restructure + centralized config schema + loader libraries
+- [ ] 01-02-PLAN.md — Migrate all scripts to load from centralized config + remove --disable-web-security
+- [ ] 01-03-PLAN.md — Display status fix + MQTT auto-discovery + heartbeat
+- [ ] 01-04-PLAN.md — Bootstrap and verify rewrite for new structure
+- [ ] 01-05-PLAN.md — Config backup/restore + branch-switch script + readme update + Pi verification
 
 ### Phase 2: Resilience & Watchdogs
 **Goal**: Automated recovery from network failures and browser crashes with zero human intervention
@@ -82,6 +84,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Centralized Configuration & Core Fixes | 0/TBD | Not started | - |
+| 1. Centralized Configuration & Core Fixes | 0/5 | Not started | - |
 | 2. Resilience & Watchdogs | 0/TBD | Not started | - |
 | 3. Testing & Cleanup | 0/TBD | Not started | - |
