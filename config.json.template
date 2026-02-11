@@ -40,6 +40,9 @@
   },
   "system": {
     "reboot_flag_file": "/var/run/touchscreen-reboot-attempted",
-    "log_tag_touchscreen": "touchscreen-check"
+    "reboot_flag_file_wifi": "/var/run/wifi-reboot-attempted",
+    "log_tag_touchscreen": "touchscreen-check",
+    "log_tag_wifi": "wifi-watchdog",
+    "log_tag_browser": "browser-watchdog"
   }
 }
