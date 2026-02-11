@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Kiosk launcher — starts Chromium in fullscreen kiosk mode.
+# Includes touch-friendly flags, crash state cleanup, and restart loop.
 # All configurable values are loaded from config.json via lib/config.sh.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,6 +16,13 @@ LOAD_WAIT="${LOAD_WAIT:-10}"
 USER_DATA_DIR="$(cfg_require '.kiosk.user_data_dir')"
 ONBOARD_SIZE="$(cfg_get '.kiosk.onboard_size')"
 ONBOARD_SIZE="${ONBOARD_SIZE:-800x300}"
+LOG_TAG="$(cfg_get '.system.log_tag_kiosk')"
+LOG_TAG="${LOG_TAG:-kiosk}"
+
+log_message() {
+  logger -t "$LOG_TAG" "$1"
+  echo "$1"
+}
 
 # Set display environment variable
 export DISPLAY=:0
@@ -33,18 +41,38 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Start chromium in kiosk mode
-chromium-browser \
-  --kiosk \
-  --disable-infobars \
-  --disable-session-crashed-bubble \
-  --disable-restore-session-state \
-  --disable-features=TranslateUI \
-  --no-first-run \
-  --fast \
-  --fast-start \
-  --disable-default-apps \
-  --password-store=basic \
-  --display=:0 \
-  --user-data-dir="$USER_DATA_DIR" \
-  "$DASHBOARD_URL"
+log_message "Kiosk launcher started, entering restart loop"
+
+# Restart loop: if Chromium exits (crash or otherwise), clean up and relaunch
+while true; do
+  # Clean up Chromium crash state to prevent "restore pages?" dialog
+  CHROMIUM_PREFS="${USER_DATA_DIR}/Default/Preferences"
+  if [ -f "$CHROMIUM_PREFS" ]; then
+    sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' "$CHROMIUM_PREFS"
+    sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$CHROMIUM_PREFS"
+    log_message "Cleaned Chromium crash state in Preferences"
+  fi
+
+  # Start Chromium in kiosk mode with touch-friendly flags
+  chromium-browser \
+    --kiosk \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-restore-session-state \
+    --disable-features=TranslateUI \
+    --no-first-run \
+    --fast \
+    --fast-start \
+    --disable-default-apps \
+    --password-store=basic \
+    --display=:0 \
+    --user-data-dir="$USER_DATA_DIR" \
+    --disable-touch-drag-drop \
+    --overscroll-history-navigation=0 \
+    --disable-pinch \
+    "$DASHBOARD_URL"
+
+  # If Chromium exits (crash or otherwise), log and restart
+  log_message "Chromium exited, restarting in 5 seconds..."
+  sleep 5
+done
