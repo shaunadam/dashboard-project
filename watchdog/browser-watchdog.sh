@@ -80,6 +80,7 @@ while true; do
     if inject_tracker; then
       log_message "CDP connection established"
     else
+      log_message "Waiting for CDP connection to Chromium..."
       sleep 10
       continue
     fi
