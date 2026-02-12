@@ -18,7 +18,6 @@ APT_PACKAGES=(
   python3-websocket
   chromium-browser
   onboard
-  xprintidle
 )
 
 log() {
