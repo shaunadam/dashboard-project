@@ -15,7 +15,6 @@ APT_PACKAGES=(
   xdotool
   python3-gpiozero
   python3-rpi.gpio
-  python3-websocket
   chromium-browser
   onboard
 )
@@ -316,7 +315,6 @@ make_scripts_executable() {
   chmod +x "${REPO_ROOT}/touchscreen/touchscreen-check.sh"
   chmod +x "${REPO_ROOT}/mqtt/mqtt_listener.py"
   chmod +x "${REPO_ROOT}/display/display_control.py"
-  chmod +x "${REPO_ROOT}/lib/browser_control.py"
   chmod +x "${REPO_ROOT}/watchdog/wifi-watchdog.sh"
   chmod +x "${REPO_ROOT}/watchdog/browser-watchdog.sh"
   chmod +x "${SCRIPT_DIR}/"*.sh
