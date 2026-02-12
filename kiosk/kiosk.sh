@@ -74,7 +74,7 @@ while true; do
     --overscroll-history-navigation=0 \
     --disable-pinch \
     --remote-debugging-port=9222 \
-    --remote-allow-origins=* \
+    "--remote-allow-origins=*" \
     "$DASHBOARD_URL"
 
   # If Chromium exits (crash or otherwise), log and restart
