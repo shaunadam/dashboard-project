@@ -1,68 +1,79 @@
 #!/bin/bash
 # Test script for WiFi watchdog recovery.
 # Disconnects WiFi, triggers watchdog, and has a safety net to restore connectivity.
+#
 # Run with: sudo bash ./test-wifi-watchdog.sh
 #
-# Safe to run over SSH — includes automatic recovery if watchdog fails.
+# Safe to run over SSH — uses systemd-run so the test survives SSH disconnects.
+# View results with: journalctl -u wifi-test --no-pager
 
-set -eu
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: Must run as root (sudo bash ./test-wifi-watchdog.sh)"
   exit 1
 fi
 
-LOG="/tmp/wifi-watchdog-test.log"
-echo "=== WiFi Watchdog Test: $(date) ===" | tee "$LOG"
+# If not already running inside systemd-run, re-exec under systemd scope
+if [ "${WIFI_TEST_IN_SYSTEMD:-}" != "1" ]; then
+  echo "Launching test in systemd scope (survives SSH disconnect)..."
+  echo "View results: journalctl -u wifi-test --no-pager"
+  systemd-run --unit=wifi-test --description="WiFi Watchdog Test" \
+    --setenv=WIFI_TEST_IN_SYSTEMD=1 \
+    bash "$SCRIPT_DIR/test-wifi-watchdog.sh"
+  echo "Test launched. Monitor with: journalctl -u wifi-test -f"
+  exit 0
+fi
+
+# --- Running inside systemd scope from here ---
+
+log() {
+  echo "[wifi-test] $*"
+}
+
+log "=== WiFi Watchdog Test: $(date) ==="
 
 # Record current state
-echo "" | tee -a "$LOG"
-echo "--- Before disconnect ---" | tee -a "$LOG"
-nmcli device status 2>&1 | tee -a "$LOG" || true
+log "--- Before disconnect ---"
+nmcli device status 2>&1 || true
 
 # Disconnect WiFi at device level
-echo "" | tee -a "$LOG"
-echo ">>> Disconnecting wlan0..." | tee -a "$LOG"
-nmcli device disconnect wlan0 2>&1 | tee -a "$LOG" || true
+log ">>> Disconnecting wlan0..."
+nmcli device disconnect wlan0 2>&1 || true
 
-echo ">>> WiFi down. Waiting 5 seconds before triggering watchdog..." | tee -a "$LOG"
+log ">>> WiFi down. Waiting 5 seconds before triggering watchdog..."
 sleep 5
 
 # Verify it's actually down
-echo "" | tee -a "$LOG"
-echo "--- After disconnect ---" | tee -a "$LOG"
-nmcli device status 2>&1 | tee -a "$LOG" || true
+log "--- After disconnect ---"
+nmcli device status 2>&1 || true
 
-# Trigger the watchdog manually (don't wait for timer)
-echo "" | tee -a "$LOG"
-echo ">>> Triggering wifi-watchdog.service now..." | tee -a "$LOG"
-# Run synchronously — systemctl start blocks until the oneshot service finishes
-systemctl start wifi-watchdog.service 2>&1 | tee -a "$LOG" || true
+# Trigger the watchdog directly (not via systemctl, since we ARE in systemd)
+log ">>> Triggering wifi-watchdog.sh directly..."
+bash "$SCRIPT_DIR/watchdog/wifi-watchdog.sh" 2>&1 || true
 
-# Wait a bit more for network to settle
+# Wait for network to settle
 sleep 10
 
-# Capture watchdog journal output
-echo "" | tee -a "$LOG"
-echo "--- Watchdog journal ---" | tee -a "$LOG"
-journalctl -u wifi-watchdog --no-pager --since "5 minutes ago" 2>&1 | tee -a "$LOG" || true
-
 # Check result
-echo "" | tee -a "$LOG"
-echo "--- After watchdog ---" | tee -a "$LOG"
-nmcli device status 2>&1 | tee -a "$LOG" || true
+log "--- After watchdog ---"
+nmcli device status 2>&1 || true
 
-if nmcli device status 2>/dev/null | grep -q "wlan0.*connected"; then
-  echo "" | tee -a "$LOG"
-  echo "RESULT: Watchdog recovered WiFi successfully!" | tee -a "$LOG"
+if nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^wlan0:connected$"; then
+  log "RESULT: Watchdog recovered WiFi successfully!"
 else
-  echo "" | tee -a "$LOG"
-  echo "RESULT: Watchdog FAILED to recover. Applying safety net..." | tee -a "$LOG"
-  nmcli device connect wlan0 2>&1 | tee -a "$LOG" || true
+  log "RESULT: Watchdog FAILED to recover. Applying safety net..."
+  nmcli device connect wlan0 2>&1 || true
   sleep 10
-  nmcli device status 2>&1 | tee -a "$LOG" || true
-  echo "Safety net applied. Check $LOG for details." | tee -a "$LOG"
+  nmcli device status 2>&1 || true
+
+  if nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^wlan0:connected$"; then
+    log "Safety net restored connectivity."
+  else
+    log "Safety net ALSO failed. Manual intervention required."
+  fi
 fi
 
-echo "" | tee -a "$LOG"
-echo "=== Test complete. Full log at $LOG ===" | tee -a "$LOG"
+log "=== Test complete ==="

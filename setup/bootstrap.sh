@@ -195,6 +195,25 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 EOF
 
+  # WiFi ensure service — clears "user-disconnected" flag on boot
+  # Runs before graphical.target so kiosk has network on launch
+  sudo tee /etc/systemd/system/wifi-ensure.service > /dev/null << EOF
+[Unit]
+Description=Ensure WiFi is connected on boot
+After=NetworkManager.service
+Before=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nmcli device connect wlan0
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
   # WiFi watchdog timer
   sudo tee /etc/systemd/system/wifi-watchdog.timer > /dev/null << EOF
 [Unit]
@@ -278,10 +297,18 @@ EOF
   sudo systemctl daemon-reload
   sudo systemctl enable touchscreen-check.service
   sudo systemctl enable mqtt-listener.service
+  sudo systemctl enable wifi-ensure.service
   sudo systemctl enable wifi-watchdog.timer
   sudo systemctl enable browser-watchdog.service
   sudo systemctl enable scheduled-reboot.timer
   log "Systemd services installed and enabled"
+}
+
+enable_persistent_journal() {
+  # Create /var/log/journal so systemd-journald persists logs across reboots.
+  # systemd defaults to persistent storage when this directory exists.
+  sudo mkdir -p /var/log/journal
+  log "Persistent journald storage enabled"
 }
 
 make_scripts_executable() {
@@ -301,6 +328,7 @@ main() {
   configure_dashboard
   generate_autostart_entry
   generate_systemd_services
+  enable_persistent_journal
   make_scripts_executable
   log "Bootstrap complete. Reboot recommended."
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -u
 
 # WiFi Watchdog - Detects network failures and recovers automatically.
 # Uses multi-stage network validation and staged recovery with nmcli.
@@ -26,10 +26,22 @@ log_message() {
   echo "$1"
 }
 
+# Check if wlan0 is in "connected" state at device level.
+# This catches "disconnected" / "unavailable" states that ping checks miss.
+check_wlan0_connected() {
+  nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^wlan0:connected$"
+}
+
 # Multi-stage network validation.
-# Returns 0 if ANY stage passes (network is working).
-# Returns 1 only if ALL stages fail.
+# Returns 0 if wlan0 is connected AND any network check passes.
+# Returns 1 if wlan0 is disconnected or all network checks fail.
 check_network() {
+  # Pre-check: wlan0 must be in "connected" state
+  if ! check_wlan0_connected; then
+    log_message "Network check: wlan0 is NOT connected ($(nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep '^wlan0:' || echo 'wlan0:unknown'))"
+    return 1
+  fi
+
   # Stage 1: Ping default gateway (local network up?)
   local gateway
   gateway=$(ip route | grep default | awk '{print $3}' | head -1)
@@ -90,43 +102,67 @@ recover_network() {
   # nmcli device disconnect marks device as manually disconnected —
   # only nmcli device connect clears that flag
   log_message "Recovery Stage 1: reconnecting wlan0 device"
-  sudo nmcli device connect wlan0 2>/dev/null || true
+  if sudo nmcli device connect wlan0 2>/dev/null; then
+    log_message "Recovery Stage 1: nmcli device connect succeeded"
+  else
+    log_message "Recovery Stage 1: nmcli device connect failed (exit $?)"
+  fi
   sleep 15
   if check_network; then
     log_message "Recovery Stage 1 succeeded: network restored after device reconnect"
     return 0
   fi
+  log_message "Recovery Stage 1 failed: network still down"
 
   # Stage 2: Connection profile down/up cycle
   log_message "Recovery Stage 2: nmcli connection down/up cycle"
   sudo nmcli connection down "$WIFI_SSID" 2>/dev/null || true
   sleep 2
-  sudo nmcli connection up "$WIFI_SSID" 2>/dev/null || true
+  if sudo nmcli connection up "$WIFI_SSID" 2>/dev/null; then
+    log_message "Recovery Stage 2: nmcli connection up succeeded"
+  else
+    log_message "Recovery Stage 2: nmcli connection up failed (exit $?)"
+  fi
   sleep 15
   if check_network; then
     log_message "Recovery Stage 2 succeeded: network restored after connection cycle"
     return 0
   fi
+  log_message "Recovery Stage 2 failed: network still down"
 
   # Stage 3: Apply credentials from config and reconnect
   log_message "Recovery Stage 3: applying WiFi credentials from config"
-  apply_wifi_credentials 2>/dev/null || true
+  if apply_wifi_credentials 2>/dev/null; then
+    log_message "Recovery Stage 3: credential apply succeeded"
+  else
+    log_message "Recovery Stage 3: credential apply failed (exit $?)"
+  fi
   sleep 15
   if check_network; then
     log_message "Recovery Stage 3 succeeded: network restored after credential apply"
     return 0
   fi
+  log_message "Recovery Stage 3 failed: network still down"
 
   # Stage 4: Restart NetworkManager entirely + reconnect device
   log_message "Recovery Stage 4: restarting NetworkManager"
-  sudo systemctl restart NetworkManager
+  if sudo systemctl restart NetworkManager; then
+    log_message "Recovery Stage 4: NetworkManager restart succeeded"
+  else
+    log_message "Recovery Stage 4: NetworkManager restart failed (exit $?)"
+  fi
   sleep 10
-  sudo nmcli device connect wlan0 2>/dev/null || true
+  if sudo nmcli device connect wlan0 2>/dev/null; then
+    log_message "Recovery Stage 4: nmcli device connect succeeded"
+  else
+    log_message "Recovery Stage 4: nmcli device connect failed (exit $?)"
+  fi
   sleep 15
   if check_network; then
     log_message "Recovery Stage 4 succeeded: network restored after NetworkManager restart"
     return 0
   fi
+  log_message "Recovery Stage 4 failed: network still down"
 
   # All recovery stages failed -- consider reboot with flag-file protection
   log_message "All recovery stages failed"
