@@ -198,8 +198,10 @@ fi
 log_message "WARNING: Network check failed - all 4 stages returned failure"
 recover_network
 
-# If recovery succeeded (didn't reboot), signal browser to reload
-# Use world-writable permissions so browser-watchdog (running as user) can delete it
+# If recovery succeeded (didn't reboot), signal browser to reload.
+# File must be owned by the kiosk user so browser-watchdog can delete it
+# (/tmp has sticky bit — only file owner can delete).
+KIOSK_USER="$(logname 2>/dev/null || echo shaun)"
 touch /tmp/wifi-recovered
-chmod 666 /tmp/wifi-recovered
+chown "$KIOSK_USER":"$KIOSK_USER" /tmp/wifi-recovered
 log_message "Network recovered - signaled browser reload via /tmp/wifi-recovered"
