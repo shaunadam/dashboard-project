@@ -171,11 +171,13 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-  # MQTT listener service
-  sudo tee /etc/systemd/system/mqtt-listener.service > /dev/null << EOF
+  # MQTT listener — installed as a systemd *user* service so it runs inside
+  # the graphical session and can reach the Wayland compositor (wlopm needs it).
+  mkdir -p "${HOME}/.config/systemd/user"
+  cat > "${HOME}/.config/systemd/user/mqtt-listener.service" << EOF
 [Unit]
 Description=MQTT Display Control Listener
-After=network-online.target
+After=graphical-session.target
 Wants=network-online.target
 
 [Service]
@@ -185,14 +187,15 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-User=${USER}
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical-session.target
 EOF
+  systemctl --user daemon-reload 2>/dev/null || true
+  systemctl --user enable mqtt-listener.service 2>/dev/null || true
 
   # WiFi ensure service — clears "user-disconnected" flag on boot
   # Runs before graphical.target so kiosk has network on launch
@@ -295,7 +298,6 @@ EOF
 
   sudo systemctl daemon-reload
   sudo systemctl enable touchscreen-check.service
-  sudo systemctl enable mqtt-listener.service
   sudo systemctl enable wifi-ensure.service
   sudo systemctl enable wifi-watchdog.timer
   sudo systemctl enable browser-watchdog.service
