@@ -45,13 +45,19 @@ log_message "Kiosk launcher started, entering restart loop"
 
 # Restart loop: if Chromium exits (crash or otherwise), clean up and relaunch
 while true; do
-  # Clean up Chromium crash state to prevent "restore pages?" dialog
+  # Clean up Chromium state to prevent session restore
   CHROMIUM_PREFS="${USER_DATA_DIR}/Default/Preferences"
   if [ -f "$CHROMIUM_PREFS" ]; then
     sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' "$CHROMIUM_PREFS"
     sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$CHROMIUM_PREFS"
     log_message "Cleaned Chromium crash state in Preferences"
   fi
+
+  # Remove session files so Chromium opens the dashboard URL, not the last page
+  rm -f "${USER_DATA_DIR}/Default/Current Session" \
+        "${USER_DATA_DIR}/Default/Current Tabs" \
+        "${USER_DATA_DIR}/Default/Last Session" \
+        "${USER_DATA_DIR}/Default/Last Tabs"
 
   # Start Chromium in kiosk mode with touch-friendly flags
   # --remote-debugging-port enables CDP (Chrome DevTools Protocol) so
