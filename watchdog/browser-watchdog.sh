@@ -46,7 +46,7 @@ get_current_url() {
 # it at the configured dashboard URL.
 restart_browser() {
   log_message "Restarting browser to return to dashboard"
-  pkill -f chromium-browser 2>/dev/null || true
+  pkill chromium 2>/dev/null || true
 }
 
 log_message "Browser watchdog started (away timeout: ${INACTIVITY_TIMEOUT}s)"
