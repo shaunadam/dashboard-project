@@ -19,14 +19,19 @@ WAYLAND_DISPLAY = get("display.wayland_display", "wayland-0")
 XDG_RUNTIME_DIR = f"/run/user/{os.getuid()}"
 
 
+def _wayland_env() -> dict:
+    """Return current environment with Wayland display vars set."""
+    env = os.environ.copy()
+    env["WAYLAND_DISPLAY"] = WAYLAND_DISPLAY
+    env["XDG_RUNTIME_DIR"] = XDG_RUNTIME_DIR
+    return env
+
+
 def run_wlopm(state: str) -> None:
     """Run wlopm command to control display power."""
     subprocess.run(
         ["wlopm", f"--{state}", "*"],
-        env={
-            "WAYLAND_DISPLAY": WAYLAND_DISPLAY,
-            "XDG_RUNTIME_DIR": XDG_RUNTIME_DIR,
-        },
+        env=_wayland_env(),
         check=True,
     )
 
@@ -36,10 +41,7 @@ def get_status() -> str:
     try:
         result = subprocess.run(
             ["wlopm"],
-            env={
-                "WAYLAND_DISPLAY": WAYLAND_DISPLAY,
-                "XDG_RUNTIME_DIR": XDG_RUNTIME_DIR,
-            },
+            env=_wayland_env(),
             capture_output=True,
             text=True,
             timeout=5,
