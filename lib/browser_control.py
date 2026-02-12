@@ -75,7 +75,9 @@ def get_page_ws_url() -> str:
 def _cdp_send(method: str, params: dict | None = None) -> dict:
     """Send a single CDP command and return the result."""
     ws_url = get_page_ws_url()
-    ws = websocket.create_connection(ws_url, timeout=10)
+    ws = websocket.create_connection(
+        ws_url, timeout=10, origin=f"http://{CDP_HOST}:{CDP_PORT}"
+    )
     try:
         command = {"id": 1, "method": method}
         if params:
