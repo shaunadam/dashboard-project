@@ -54,6 +54,9 @@ while true; do
   fi
 
   # Start Chromium in kiosk mode with touch-friendly flags
+  # --remote-debugging-port enables CDP (Chrome DevTools Protocol) so
+  # browser-watchdog.sh can navigate back to the dashboard URL after idle
+  # timeout, rather than just refreshing the current page.
   chromium-browser \
     --kiosk \
     --disable-infobars \
@@ -70,6 +73,7 @@ while true; do
     --disable-touch-drag-drop \
     --overscroll-history-navigation=0 \
     --disable-pinch \
+    --remote-debugging-port=9222 \
     "$DASHBOARD_URL"
 
   # If Chromium exits (crash or otherwise), log and restart

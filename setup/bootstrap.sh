@@ -15,6 +15,7 @@ APT_PACKAGES=(
   xdotool
   python3-gpiozero
   python3-rpi.gpio
+  python3-websocket
   chromium-browser
   onboard
   xprintidle
@@ -123,7 +124,7 @@ configure_dashboard() {
         auth_method: "trusted_network"
       },
       browser: {
-        inactivity_timeout_seconds: 600,
+        inactivity_timeout_seconds: 60,
         scheduled_reboot_interval_hours: 48
       },
       system: {
@@ -316,6 +317,7 @@ make_scripts_executable() {
   chmod +x "${REPO_ROOT}/touchscreen/touchscreen-check.sh"
   chmod +x "${REPO_ROOT}/mqtt/mqtt_listener.py"
   chmod +x "${REPO_ROOT}/display/display_control.py"
+  chmod +x "${REPO_ROOT}/lib/browser_control.py"
   chmod +x "${REPO_ROOT}/watchdog/wifi-watchdog.sh"
   chmod +x "${REPO_ROOT}/watchdog/browser-watchdog.sh"
   chmod +x "${SCRIPT_DIR}/"*.sh
