@@ -202,7 +202,8 @@ EOF
   sudo tee /etc/systemd/system/wifi-ensure.service > /dev/null << EOF
 [Unit]
 Description=Ensure WiFi is connected on boot
-After=NetworkManager.service
+After=NetworkManager-wait-online.service
+Wants=NetworkManager-wait-online.service
 Before=graphical.target
 
 [Service]
@@ -251,14 +252,14 @@ EOF
 Description=Browser Idle Watchdog
 After=graphical.target touchscreen-check.service
 Wants=graphical.target
+StartLimitBurst=5
+StartLimitIntervalSec=300
 
 [Service]
 Type=simple
 ExecStart=${REPO_ROOT}/watchdog/browser-watchdog.sh
 Restart=on-failure
 RestartSec=10
-StartLimitBurst=5
-StartLimitIntervalSec=300
 StandardOutput=journal
 StandardError=journal
 User=${USER}
