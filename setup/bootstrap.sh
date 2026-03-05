@@ -177,7 +177,7 @@ EOF
   cat > "${HOME}/.config/systemd/user/mqtt-listener.service" << EOF
 [Unit]
 Description=MQTT Display Control Listener
-After=graphical-session.target
+After=default.target
 Wants=network-online.target
 
 [Service]
@@ -192,7 +192,7 @@ KillSignal=SIGTERM
 TimeoutStopSec=30
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target
 EOF
   systemctl --user daemon-reload 2>/dev/null || true
   systemctl --user enable mqtt-listener.service 2>/dev/null || true
