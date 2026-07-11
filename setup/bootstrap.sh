@@ -122,7 +122,7 @@ configure_dashboard() {
         auth_method: "trusted_network"
       },
       browser: {
-        inactivity_timeout_seconds: 60,
+        inactivity_timeout_seconds: 300,
         scheduled_reboot_interval_hours: 48
       },
       system: {
