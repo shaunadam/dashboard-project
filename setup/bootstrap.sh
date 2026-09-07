@@ -4,6 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Runtime dependencies. vim/htop are on-Pi conveniences, not runtime deps, so
+# verify.sh deliberately does not fail on them.
+# NOTE: wlopm (used by display/display_control.py) is not packaged for Raspberry
+# Pi OS and must be installed separately; verify.sh checks for it.
 APT_PACKAGES=(
   git
   vim
@@ -12,9 +16,6 @@ APT_PACKAGES=(
   jq
   python3-paho-mqtt
   unclutter
-  xdotool
-  python3-gpiozero
-  python3-rpi.gpio
   chromium-browser
   onboard
 )
@@ -127,7 +128,11 @@ configure_dashboard() {
       },
       system: {
         reboot_flag_file: "/var/run/touchscreen-reboot-attempted",
-        log_tag_touchscreen: "touchscreen-check"
+        reboot_flag_file_wifi: "/var/run/wifi-reboot-attempted",
+        log_tag_touchscreen: "touchscreen-check",
+        log_tag_kiosk: "kiosk",
+        log_tag_wifi: "wifi-watchdog",
+        log_tag_browser: "browser-watchdog"
       }
     }' > "${config_file}"
 

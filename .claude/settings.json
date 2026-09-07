@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh pi *)",
+      "Bash(git *)",
+      "Bash(python3 -m pytest *)"
+    ],
+    "deny": [
+      "Bash(ssh pi sudo rm *)"
+    ]
+  }
+}

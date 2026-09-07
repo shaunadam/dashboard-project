@@ -116,10 +116,12 @@ check_mqtt_listener() {
     issues+=("mqtt_listener.py is not executable")
   fi
 
-  if systemctl is-enabled mqtt-listener.service >/dev/null 2>&1; then
-    log "mqtt-listener.service is enabled."
+  # mqtt-listener is a systemd *user* service (it needs the graphical session
+  # to reach the Wayland compositor for wlopm), so check the user manager.
+  if systemctl --user is-enabled mqtt-listener.service >/dev/null 2>&1; then
+    log "mqtt-listener.service (user) is enabled."
   else
-    issues+=("mqtt-listener.service is not enabled; run bootstrap.sh or: sudo systemctl enable mqtt-listener.service")
+    issues+=("mqtt-listener.service is not enabled; run bootstrap.sh or: systemctl --user enable mqtt-listener.service")
   fi
 }
 
@@ -178,16 +180,12 @@ main() {
   log "Starting verification..."
   require_command chromium-browser
   require_command unclutter
-  require_command xdotool
   require_command onboard
+  require_command wlopm
   require_command git
   require_command curl
-  require_command htop
   require_command python3
   require_command jq
-  require_command xprintidle
-  require_python_module gpiozero
-  require_python_module RPi.GPIO
   require_python_module paho.mqtt.client
   check_config
   check_libraries

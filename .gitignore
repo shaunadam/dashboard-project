@@ -7,7 +7,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-usb*.txt
 
 # Vim
 *.swp
@@ -19,6 +18,9 @@ usb*.txt
 .vscode/
 .idea/
 
+# Claude Code (settings.json is shared; settings.local.json is per-machine)
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
@@ -28,3 +30,5 @@ Thumbs.db
 config.json
 config/mqtt.json
 
+# Diagnostic output (scripts/diagnose-usb.sh)
+usb*.txt

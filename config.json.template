@@ -42,6 +42,7 @@
     "reboot_flag_file": "/var/run/touchscreen-reboot-attempted",
     "reboot_flag_file_wifi": "/var/run/wifi-reboot-attempted",
     "log_tag_touchscreen": "touchscreen-check",
+    "log_tag_kiosk": "kiosk",
     "log_tag_wifi": "wifi-watchdog",
     "log_tag_browser": "browser-watchdog"
   }
