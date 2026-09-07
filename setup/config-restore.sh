@@ -42,7 +42,8 @@ log "Configuration restored from: ${BACKUP}"
 # Restart services if systemd is available
 if command -v systemctl >/dev/null 2>&1; then
   log "Restarting services..."
-  sudo systemctl restart mqtt-listener.service 2>/dev/null && log "mqtt-listener restarted" || log "WARNING: mqtt-listener restart failed (may not be installed yet)"
+  # mqtt-listener is a systemd *user* service (see setup/systemd-units.sh).
+  systemctl --user restart mqtt-listener.service 2>/dev/null && log "mqtt-listener restarted" || log "WARNING: mqtt-listener restart failed (may not be installed yet)"
   log "Services restarted. Run verify.sh to confirm."
 else
   log "systemctl not available — skipping service restart."

@@ -74,7 +74,7 @@ configure_dashboard() {
   read -rp "Chromium user data dir [${HOME}/.config/chromium-kiosk]: " chromium_dir
   chromium_dir="${chromium_dir:-${HOME}/.config/chromium-kiosk}"
 
-  # WiFi (for Phase 2 watchdog)
+  # WiFi (used by watchdog/wifi-watchdog.sh to reapply credentials on failure)
   read -rp "WiFi SSID: " wifi_ssid
   read -rsp "WiFi Password: " wifi_password
   echo ""
@@ -127,8 +127,9 @@ configure_dashboard() {
         scheduled_reboot_interval_hours: 48
       },
       system: {
-        reboot_flag_file: "/var/run/touchscreen-reboot-attempted",
-        reboot_flag_file_wifi: "/var/run/wifi-reboot-attempted",
+        reboot_flag_file: "/var/lib/dashboard-project/touchscreen-reboot-attempted",
+        reboot_flag_file_wifi: "/var/lib/dashboard-project/wifi-reboot-attempted",
+        wifi_recovery_signal_file: "/tmp/wifi-recovered",
         log_tag_touchscreen: "touchscreen-check",
         log_tag_kiosk: "kiosk",
         log_tag_wifi: "wifi-watchdog",
@@ -157,157 +158,19 @@ EOF
   log "Autostart entry installed to ${dest}"
 }
 
+ensure_state_directory() {
+  # Persistent (non-tmpfs) home for reboot-attempt flag files. /var/run is
+  # tmpfs and clears every boot, which defeats the boot-loop protection these
+  # flags exist for.
+  sudo mkdir -p /var/lib/dashboard-project
+  sudo chmod 755 /var/lib/dashboard-project
+  log "Persistent state directory ready at /var/lib/dashboard-project"
+}
+
 generate_systemd_services() {
-  # Touchscreen check service
-  sudo tee /etc/systemd/system/touchscreen-check.service > /dev/null << EOF
-[Unit]
-Description=Touchscreen Detection and Auto-Reboot Service
-After=multi-user.target
-Wants=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=${REPO_ROOT}/touchscreen/touchscreen-check.sh
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # MQTT listener — installed as a systemd *user* service so it runs inside
-  # the graphical session and can reach the Wayland compositor (wlopm needs it).
-  mkdir -p "${HOME}/.config/systemd/user"
-  cat > "${HOME}/.config/systemd/user/mqtt-listener.service" << EOF
-[Unit]
-Description=MQTT Display Control Listener
-After=default.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 ${REPO_ROOT}/mqtt/mqtt_listener.py
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-KillMode=mixed
-KillSignal=SIGTERM
-TimeoutStopSec=30
-
-[Install]
-WantedBy=default.target
-EOF
-  systemctl --user daemon-reload 2>/dev/null || true
-  systemctl --user enable mqtt-listener.service 2>/dev/null || true
-
-  # WiFi ensure service — clears "user-disconnected" flag on boot
-  # Runs before graphical.target so kiosk has network on launch
-  sudo tee /etc/systemd/system/wifi-ensure.service > /dev/null << EOF
-[Unit]
-Description=Ensure WiFi is connected on boot
-After=NetworkManager-wait-online.service
-Wants=NetworkManager-wait-online.service
-Before=graphical.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/nmcli device connect wlan0
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # WiFi watchdog timer
-  sudo tee /etc/systemd/system/wifi-watchdog.timer > /dev/null << EOF
-[Unit]
-Description=WiFi Watchdog Timer
-After=touchscreen-check.service
-
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
-AccuracySec=30s
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  # WiFi watchdog service
-  sudo tee /etc/systemd/system/wifi-watchdog.service > /dev/null << EOF
-[Unit]
-Description=WiFi Watchdog Check
-After=network-online.target touchscreen-check.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=${REPO_ROOT}/watchdog/wifi-watchdog.sh
-StandardOutput=journal
-StandardError=journal
-EOF
-
-  # Browser watchdog service
-  sudo tee /etc/systemd/system/browser-watchdog.service > /dev/null << EOF
-[Unit]
-Description=Browser Idle Watchdog
-After=graphical.target touchscreen-check.service
-Wants=graphical.target
-StartLimitBurst=5
-StartLimitIntervalSec=300
-
-[Service]
-Type=simple
-ExecStart=${REPO_ROOT}/watchdog/browser-watchdog.sh
-Restart=on-failure
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-User=${USER}
-Environment=DISPLAY=:0
-
-[Install]
-WantedBy=graphical.target
-EOF
-
-  # Scheduled reboot timer
-  local reboot_hours
-  reboot_hours=$(jq -r '.browser.scheduled_reboot_interval_hours // 48' "${REPO_ROOT}/config.json" 2>/dev/null || echo "48")
-
-  sudo tee /etc/systemd/system/scheduled-reboot.timer > /dev/null << EOF
-[Unit]
-Description=Scheduled Soft Reboot Timer
-
-[Timer]
-OnBootSec=${reboot_hours}h
-AccuracySec=1h
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  # Scheduled reboot service
-  sudo tee /etc/systemd/system/scheduled-reboot.service > /dev/null << EOF
-[Unit]
-Description=Scheduled Soft Reboot
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl reboot
-StandardOutput=journal
-StandardError=journal
-EOF
-
-  sudo systemctl daemon-reload
-  sudo systemctl enable touchscreen-check.service
-  sudo systemctl enable wifi-ensure.service
-  sudo systemctl enable wifi-watchdog.timer
-  sudo systemctl enable browser-watchdog.service
-  sudo systemctl enable scheduled-reboot.timer
+  # shellcheck source=./systemd-units.sh
+  source "${SCRIPT_DIR}/systemd-units.sh"
+  install_systemd_units
   log "Systemd services installed and enabled"
 }
 
@@ -334,6 +197,7 @@ main() {
   install_mqtt_dependencies
   configure_dashboard
   generate_autostart_entry
+  ensure_state_directory
   generate_systemd_services
   enable_persistent_journal
   make_scripts_executable

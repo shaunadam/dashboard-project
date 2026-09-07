@@ -9,12 +9,12 @@ log() { echo "[switch-branch] $*"; }
 if [[ $# -lt 1 ]]; then
   log "Usage: $0 <branch-name>"
   log ""
-  log "Switches git branch and restarts all dashboard services."
+  log "Fetches from origin, switches branch, and restarts dashboard services."
   log "Config is git-ignored, so it persists across switches."
   log ""
   log "Examples:"
   log "  $0 main              # Switch to production"
-  log "  $0 phase-1-dev       # Switch to development"
+  log "  $0 feat/my-feature   # Switch to a feature branch"
   exit 1
 fi
 
@@ -29,19 +29,24 @@ if ! git diff --quiet || ! git diff --staged --quiet; then
   exit 1
 fi
 
-# Verify branch exists
-if ! git rev-parse --verify "${TARGET_BRANCH}" >/dev/null 2>&1; then
-  log "ERROR: Branch '${TARGET_BRANCH}' does not exist."
+log "Fetching from origin..."
+git fetch origin
+
+# Prefer the up-to-date remote branch; fall back to a Pi-local-only branch.
+if git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+  CHECKOUT_REF="origin/${TARGET_BRANCH}"
+elif git rev-parse --verify "${TARGET_BRANCH}" >/dev/null 2>&1; then
+  CHECKOUT_REF="${TARGET_BRANCH}"
+else
+  log "ERROR: Branch '${TARGET_BRANCH}' does not exist locally or on origin."
   log "Available branches:"
-  git branch --list
+  git branch -a --list
   exit 1
 fi
 
 CURRENT_BRANCH="$(git branch --show-current)"
-log "Switching from '${CURRENT_BRANCH}' to '${TARGET_BRANCH}'..."
-
-# Switch branch
-git checkout "${TARGET_BRANCH}"
+log "Switching from '${CURRENT_BRANCH}' to '${TARGET_BRANCH}' (${CHECKOUT_REF})..."
+git checkout -B "${TARGET_BRANCH}" "${CHECKOUT_REF}"
 log "Now on branch: $(git branch --show-current)"
 
 # Check if config.json exists (git-ignored, should persist)
@@ -53,59 +58,23 @@ fi
 
 # Restart services
 if command -v systemctl >/dev/null 2>&1; then
-  log "Restarting services..."
+  if [[ -f "${SCRIPT_DIR}/systemd-units.sh" ]]; then
+    log "Regenerating systemd service files (paths may differ between branches)..."
+    # shellcheck source=./systemd-units.sh
+    source "${SCRIPT_DIR}/systemd-units.sh"
+    install_systemd_units
 
-  # Regenerate systemd files (paths may differ between branches)
-  log "Regenerating systemd service files..."
-
-  # Touchscreen check service
-  if [[ -f "${REPO_ROOT}/touchscreen/touchscreen-check.sh" ]]; then
-    sudo tee /etc/systemd/system/touchscreen-check.service > /dev/null << SVCEOF
-[Unit]
-Description=Touchscreen Detection and Auto-Reboot Service
-After=multi-user.target
-Wants=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=${REPO_ROOT}/touchscreen/touchscreen-check.sh
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
+    log "Restarting long-running services to pick up new code..."
+    # mqtt-listener is a systemd *user* service (needs the graphical session
+    # for wlopm); browser-watchdog is a system service running as $USER.
+    # touchscreen-check/wifi-ensure only run at boot and wifi-watchdog is
+    # timer-triggered, so none of those need restarting here.
+    systemctl --user restart mqtt-listener.service 2>/dev/null && log "mqtt-listener restarted" || log "WARNING: mqtt-listener restart failed"
+    sudo systemctl restart browser-watchdog.service 2>/dev/null && log "browser-watchdog restarted" || log "WARNING: browser-watchdog restart failed"
+    log "Services updated."
+  else
+    log "setup/systemd-units.sh not found on this branch — skipping service regeneration."
   fi
-
-  # MQTT listener service
-  if [[ -f "${REPO_ROOT}/mqtt/mqtt_listener.py" ]]; then
-    sudo tee /etc/systemd/system/mqtt-listener.service > /dev/null << SVCEOF
-[Unit]
-Description=MQTT Display Control Listener
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 ${REPO_ROOT}/mqtt/mqtt_listener.py
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-User=${USER}
-KillMode=mixed
-KillSignal=SIGTERM
-TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
-  fi
-
-  sudo systemctl daemon-reload
-  sudo systemctl restart mqtt-listener.service 2>/dev/null && log "mqtt-listener restarted" || log "WARNING: mqtt-listener restart failed"
-  log "Services updated."
 else
   log "systemctl not available — skipping service restart."
 fi

@@ -13,7 +13,7 @@ source "$REPO_ROOT/lib/config.sh"
 # Load configuration
 TOUCHSCREEN_ID="$(cfg_require '.touchscreen.usb_device_id')"
 FLAG_FILE="$(cfg_get '.system.reboot_flag_file')"
-FLAG_FILE="${FLAG_FILE:-/var/run/touchscreen-reboot-attempted}"
+FLAG_FILE="${FLAG_FILE:-/var/lib/dashboard-project/touchscreen-reboot-attempted}"
 LOG_TAG="$(cfg_get '.system.log_tag_touchscreen')"
 LOG_TAG="${LOG_TAG:-touchscreen-check}"
 WAIT_TIME="$(cfg_get '.touchscreen.detection_wait_seconds')"
@@ -53,6 +53,7 @@ fi
 
 # Create flag file and reboot
 log_message "Creating reboot flag and initiating system reboot..."
+mkdir -p "$(dirname "$FLAG_FILE")"
 touch "$FLAG_FILE"
 
 log_message "REBOOTING: Touchscreen not detected, attempting warm boot recovery..."

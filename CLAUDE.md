@@ -20,7 +20,7 @@ VM in the basement; the Pi is a display + MQTT client only.
 3. Deploy to Pi: `ssh pi '~/dashboard-project/setup/switch-branch.sh <branch>'`
    (aborts if the Pi has uncommitted changes — investigate, don't force).
 4. Verify: `ssh pi '~/dashboard-project/setup/verify.sh'`
-5. Logs: `ssh pi 'journalctl -u mqtt-listener -u browser-watchdog -u wifi-watchdog -n 100 --no-pager'`
+5. Logs: `ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -n 100 --no-pager'`
    and `ssh pi 'journalctl --user -u mqtt-listener -n 50 --no-pager'` (mqtt-listener is a user service).
 6. When it survives a real reboot (`ssh pi sudo reboot`, wait ~3 min, verify again), merge to `main`
    and switch the Pi back: `ssh pi '~/dashboard-project/setup/switch-branch.sh main'`.
@@ -31,9 +31,7 @@ VM in the basement; the Pi is a display + MQTT client only.
 - `display/display_control.py` — wlopm power control
 - `watchdog/` — wifi + browser watchdogs (root + user services)
 - `touchscreen/` — cold-boot USB re-enumeration fix (one auto-reboot)
-- `setup/` — bootstrap / verify / backup / restore / switch-branch
-- `.planning/` — GSD roadmap, research, phase plans. Read `.planning/STATE.md`
-  and `.planning/ROADMAP.md` before starting a phase. Phase 3 (tests + cleanup) is next.
+- `setup/` — bootstrap / verify / backup / restore / switch-branch / shared systemd unit definitions
 
 ## Testing without the Pi
 Unit-test `mqtt/` and `display/` with mocked subprocess/paho. Anything touching wlopm,

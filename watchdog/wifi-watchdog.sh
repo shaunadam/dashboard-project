@@ -17,9 +17,11 @@ DASHBOARD_URL="$(cfg_require '.dashboard.url')"
 
 # Load configuration (optional values with sensible defaults)
 FLAG_FILE="$(cfg_get '.system.reboot_flag_file_wifi')"
-FLAG_FILE="${FLAG_FILE:-/var/run/wifi-reboot-attempted}"
+FLAG_FILE="${FLAG_FILE:-/var/lib/dashboard-project/wifi-reboot-attempted}"
 LOG_TAG="$(cfg_get '.system.log_tag_wifi')"
 LOG_TAG="${LOG_TAG:-wifi-watchdog}"
+RECOVERY_SIGNAL="$(cfg_get '.system.wifi_recovery_signal_file')"
+RECOVERY_SIGNAL="${RECOVERY_SIGNAL:-/tmp/wifi-recovered}"
 
 log_message() {
   logger -t "$LOG_TAG" "$1"
@@ -174,6 +176,7 @@ recover_network() {
   fi
 
   # Set flag and reboot
+  mkdir -p "$(dirname "$FLAG_FILE")"
   touch "$FLAG_FILE"
   log_message "REBOOTING: Network recovery failed, attempting system reboot..."
   systemctl reboot
@@ -202,6 +205,6 @@ recover_network
 # File must be owned by the kiosk user so browser-watchdog can delete it
 # (/tmp has sticky bit — only file owner can delete).
 KIOSK_USER="$(logname 2>/dev/null || echo shaun)"
-touch /tmp/wifi-recovered
-chown "$KIOSK_USER":"$KIOSK_USER" /tmp/wifi-recovered
-log_message "Network recovered - signaled browser reload via /tmp/wifi-recovered"
+touch "$RECOVERY_SIGNAL"
+chown "$KIOSK_USER":"$KIOSK_USER" "$RECOVERY_SIGNAL"
+log_message "Network recovered - signaled browser reload via $RECOVERY_SIGNAL"

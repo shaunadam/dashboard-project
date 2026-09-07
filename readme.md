@@ -1,311 +1,265 @@
-# Family Chore Dashboard
+# Dashboard Pi
 
-A wall-mounted touchscreen dashboard for family chore management, integrated with Home Assistant.
+A wall-mounted Raspberry Pi kiosk that displays a Home Assistant week-planner
+dashboard on a touchscreen. It boots to fullscreen with zero human intervention
+and integrates with Home Assistant via MQTT for remote display power control.
 
 ## Hardware
 
 - **Raspberry Pi 4** (Model B)
-- **15" USB Touchscreen Display** (ILITEK USB controller)
-- **MicroSD Card** (bootable system)
+- **15" USB touchscreen** (ILITEK controller, USB ID `222a:0001`)
+- MicroSD card (bootable system)
 
-### Touchscreen Cold Boot Issue
+### Touchscreen cold-boot issue
 
-The USB touchscreen requires a warm boot to initialize properly:
-- **Cold boot** (power cycle): Touchscreen USB controller doesn't enumerate in time
-- **Warm boot** (reboot): Touchscreen initializes correctly
+The USB touchscreen controller doesn't reliably enumerate on a cold boot
+(power cycle) but works fine after a warm reboot. `touchscreen-check.service`
+handles this automatically:
 
-**Automatic Recovery:**
-The system includes `touchscreen-check.service` which:
-1. Waits 60 seconds after boot for hardware initialization
-2. Checks if touchscreen (222a:0001) is detected
-3. Performs ONE automatic reboot if missing (prevents infinite loops)
-4. After reboot, touchscreen works normally
+1. Waits ~60s after boot for hardware initialization.
+2. Checks whether the touchscreen (`222a:0001`) is detected.
+3. If not, performs **one** automatic reboot (a persistent flag file at
+   `/var/lib/dashboard-project/touchscreen-reboot-attempted` prevents an
+   infinite reboot loop — if the touchscreen is still missing after that one
+   reboot, the service gives up and logs an error for manual investigation).
 
-**What this means:**
-- First boot after power loss takes ~2-3 minutes (includes auto-reboot)
-- Normal reboots (`sudo reboot`) work immediately
-- No manual intervention required
+First boot after a full power loss takes ~2-3 minutes (includes the one
+auto-reboot). A normal `sudo reboot` reaches the dashboard immediately.
 
-### Operating System
-- **Raspberry Pi OS with Desktop** (64-bit)
+### Operating system
+
+- Raspberry Pi OS with Desktop (64-bit), Wayland compositor
 - Hostname: `dashboard.local`
 - Auto-login enabled for kiosk mode
 
-### Core Software
-- **Chromium Browser** - Kiosk mode display
-- **Python 3** - For automation scripts and sensor integration
-- **Git** - Version control
-- **VNC** - Remote desktop access
-- **jq** - JSON processor for configuration management
+## Software stack
 
-### Python Libraries
-- `gpiozero` - GPIO sensor control
-- `RPi.GPIO` - Low-level GPIO access
-- `paho-mqtt` - MQTT client for Home Assistant integration
+- **Chromium** — kiosk-mode display, launched by `kiosk/kiosk.sh`
+- **Python 3** + **paho-mqtt** — MQTT client for Home Assistant integration
+- **wlopm** — Wayland display power control (not in apt; see Bootstrap below)
+- **jq** — JSON config generation/parsing in the shell scripts
+- **unclutter** — hides the mouse cursor when idle
+- **onboard** — on-screen keyboard for touch input (e.g. entering WiFi
+  credentials during recovery)
+- **NetworkManager (`nmcli`)** — used by the WiFi watchdog for detection and
+  recovery
 
-### Utilities
-- `unclutter` - Hides mouse cursor when idle
-- `xdotool` - Simulates keyboard/mouse input for automation
-- `onboard` - On-screen keyboard for touchscreen input
-- `wlopm` - Wayland display power management
-- `vim`, `curl`, `htop` - Standard utilities
+## Home Assistant integration
 
-## Home Assistant Integration
+- Home Assistant + the MQTT broker run on a separate VM (basement server) —
+  the Pi is a display + MQTT client only.
+- `mqtt/mqtt_listener.py` subscribes to a command topic and publishes
+  status/availability, and on connect publishes an MQTT auto-discovery
+  payload so a "Dashboard Pi" device with a display power switch entity
+  appears in Home Assistant automatically — no `configuration.yaml` editing
+  needed.
 
-### Infrastructure
-- **Home Assistant VM** running on Ubuntu Desktop (basement server, not dashboard)
-- **MQTT Broker** running on Home Assistant server for device communication
-
-### Integrations
-- **MQTT Display Control** - Turn dashboard display on/off via Home Assistant automations
-- **MQTT Auto-Discovery** - The Pi automatically registers itself as a "Dashboard Pi" device in Home Assistant. No manual `configuration.yaml` editing needed -- the display switch entity appears automatically under Settings > Devices.
-
-## Project Structure
+## Project structure
 
 ```
 dashboard-project/
 ├── config.json.template        # Configuration schema reference
 ├── config.json                 # Active config (git-ignored, created by bootstrap)
 ├── lib/
-│   ├── config.sh               # Bash config loader (cfg_get, cfg_require)
-│   └── config.py               # Python config loader (get, require)
+│   ├── config.sh                # Bash config loader (cfg_get, cfg_require)
+│   └── config.py                # Python config loader (get, require)
 ├── kiosk/
-│   └── kiosk.sh                # Chromium kiosk launcher
+│   └── kiosk.sh                  # Chromium kiosk launcher + restart loop
 ├── display/
-│   └── display_control.py      # HDMI display power control (wlopm)
+│   └── display_control.py        # HDMI display power control (wlopm)
 ├── mqtt/
-│   ├── mqtt_listener.py        # MQTT subscriber for HA integration
-│   └── ha_init.py              # MQTT auto-discovery for Home Assistant
+│   └── mqtt_listener.py          # MQTT subscriber + HA auto-discovery
 ├── touchscreen/
-│   └── touchscreen-check.sh    # Boot-time touchscreen detection
+│   └── touchscreen-check.sh      # Boot-time touchscreen detection + one auto-reboot
+├── watchdog/
+│   ├── wifi-watchdog.sh           # Network failure detection + staged recovery
+│   └── browser-watchdog.sh        # Idle auto-return + WiFi-recovery reload
 ├── setup/
-│   ├── bootstrap.sh            # Automated provisioning
-│   ├── verify.sh               # Post-setup verification
-│   ├── config-backup.sh        # Export config to backup
-│   ├── config-restore.sh       # Restore config from backup
-│   └── switch-branch.sh        # Switch branch + restart services
-├── scripts/
-│   ├── diagnose-usb.sh         # (legacy diagnostic)
-│   └── usb-rescan.sh           # (legacy diagnostic)
+│   ├── bootstrap.sh                # Automated provisioning
+│   ├── verify.sh                   # Post-setup verification
+│   ├── config-backup.sh            # Export config to backup
+│   ├── config-restore.sh           # Restore config from backup
+│   ├── switch-branch.sh            # Switch branch + regenerate services + restart
+│   └── systemd-units.sh            # Shared systemd unit definitions (sourced by
+│                                    #   bootstrap.sh and switch-branch.sh)
+├── test-wifi-watchdog.sh       # Manual WiFi-drop test harness (see below)
 └── readme.md                   # This file
 ```
 
-## Installation & Setup
+## Installation & setup
 
-### Automated Bootstrap (Recommended)
+### Automated bootstrap (recommended)
 
-Run the bootstrap script after cloning to a fresh Pi:
+Run after cloning to a fresh Pi:
 
 ```bash
 ./setup/bootstrap.sh
 ```
 
 Bootstrap will:
-- Install required apt packages (jq, chromium, unclutter, etc.)
-- Install paho-mqtt Python library
-- Prompt for configuration values (dashboard URL, MQTT credentials, etc.)
-- Generate `config.json` with your values
-- Create systemd service files and autostart entry
+- Install required apt packages (jq, chromium, unclutter, onboard, etc.)
+- Prompt for configuration values (dashboard URL, MQTT credentials, WiFi, etc.)
+  and generate `config.json`
+- Create the persistent state directory (`/var/lib/dashboard-project`) used
+  for boot-loop-protection flag files
+- Create systemd service/timer files and the kiosk autostart entry
 - Set script permissions
 
-After the script completes, confirm everything is configured correctly:
+**wlopm is not packaged for Raspberry Pi OS** and must be installed
+separately (build from source or grab a prebuilt binary for your `wlr`
+version) before `display/display_control.py` will work. `setup/verify.sh`
+checks for it and will tell you if it's missing.
+
+After bootstrap completes, confirm everything is configured correctly:
 
 ```bash
 ./setup/verify.sh
 ```
 
-### Initial Pi Configuration
+### Initial Pi configuration
 
-1. **Flash SD Card:**
-   - Use Raspberry Pi Imager
+1. **Flash the SD card** with Raspberry Pi Imager:
    - Select "Raspberry Pi OS with Desktop (64-bit)"
-   - Configure advanced options:
-     - Enable SSH
-     - Set username/password
-     - Configure WiFi
-     - Set hostname: `dashboard.local`
-     - Set timezone and locale
-
-2. **First Boot Setup:**
-   ```bash
-   ssh shaun@dashboard.local
-
-   # Update system
-   sudo apt update && sudo apt upgrade -y
-
-   # Install essential packages
-   sudo apt install -y git vim curl htop python3-pip unclutter xdotool
-   sudo apt install -y python3-gpiozero python3-rpi.gpio
-   ```
-
-3. **Configure Auto-Login:**
+   - Configure advanced options: enable SSH, set username/password, configure
+     WiFi, set hostname `dashboard.local`, set timezone/locale
+2. **Enable auto-login:**
    ```bash
    sudo raspi-config
    # System Options → Boot / Auto Login → Desktop Autologin
-   # Interface Options → VNC → Enable
    ```
-
-4. **Clone Repository:**
+3. **Clone the repository:**
    ```bash
    cd ~
    git clone <your-repo-url> dashboard-project
    cd dashboard-project
    ```
-
-5. **Run Bootstrap:**
+4. **Run bootstrap and verify:**
    ```bash
    ./setup/bootstrap.sh
    ./setup/verify.sh
    ```
 
-### Kiosk Mode
+### Kiosk mode
 
-The `kiosk/kiosk.sh` launcher starts Chromium in fullscreen kiosk mode on boot. All configuration (dashboard URL, Chromium data directory, on-screen keyboard size) is read from `config.json`.
+`kiosk/kiosk.sh` starts Chromium in fullscreen kiosk mode and restarts it if
+it ever exits (crash or otherwise), clearing crash-restore state first so no
+"restore pages?" dialog appears. All configuration (dashboard URL, Chromium
+data directory, on-screen keyboard size) is read from `config.json`.
 
-**Autostart** is configured automatically by `setup/bootstrap.sh` -- the kiosk launches on login.
+Autostart is configured automatically by `setup/bootstrap.sh`.
 
-**Make script executable:** (the bootstrap script runs this step)
-```bash
-chmod +x kiosk/kiosk.sh
-```
+## Configuration management
 
-## Configuration Management
-
-All project configuration is stored in a single `config.json` file at the repo root. This file is git-ignored so credentials are never committed.
-
-### What is Configurable
+All project configuration lives in a single `config.json` at the repo root.
+It's git-ignored so credentials are never committed; the schema (with
+placeholder tokens) lives in `config.json.template`.
 
 | Section | Values |
 |---------|--------|
-| `dashboard` | Home Assistant URL |
+| `dashboard` | Home Assistant dashboard URL |
 | `mqtt` | Broker address, port, username, password, client ID, topics, heartbeat interval |
 | `display` | Wayland display name |
 | `touchscreen` | USB device ID, detection wait time |
 | `kiosk` | Desktop load wait, on-screen keyboard size, Chromium data directory |
-| `wifi` | SSID, password (for future watchdog) |
+| `wifi` | SSID, password (used by the WiFi watchdog to reapply credentials) |
 | `home_assistant` | Auth method |
-| `browser` | Inactivity timeout, scheduled reboot interval |
-| `system` | Reboot flag file path, log tag |
+| `browser` | Inactivity timeout (auto-return to dashboard), scheduled reboot interval |
+| `system` | Reboot flag file paths, WiFi recovery signal file, log tags |
 
-See `config.json.template` for the full schema with placeholder tokens.
-
-### Backup Configuration
-
-Export your configuration to a safe location:
+### Backup
 
 ```bash
-./setup/config-backup.sh /path/to/backup.json
+./setup/config-backup.sh /path/to/backup.json   # defaults to ~/dashboard-config-backup.json
 ```
 
-Without arguments, the backup is saved to `~/dashboard-config-backup.json`.
+The backup contains MQTT and WiFi credentials — store it securely, off the Pi.
 
-**Important:** The backup contains MQTT credentials. Store it securely.
-
-### Restore Configuration
-
-Restore a previously backed-up configuration:
+### Restore
 
 ```bash
 ./setup/config-restore.sh /path/to/backup.json
 ```
 
-The restore script validates the backup file (valid JSON, required keys present) before applying it, then restarts services automatically.
+Validates the backup (JSON syntax, required keys) before applying it, then
+restarts the affected services.
 
-## Usage
+## Resilience
 
-### Starting/Stopping Kiosk Mode
+### WiFi watchdog
 
-**Automatic Start:**
-- Kiosk mode launches automatically on boot via autostart
+`watchdog/wifi-watchdog.timer` runs `wifi-watchdog.sh` every 5 minutes. It
+validates connectivity in stages (device state → gateway ping → public DNS →
+DNS resolution → HTTP check to the dashboard) and, on failure, works through
+increasingly disruptive recovery steps: reconnect the WiFi device, cycle the
+connection, reapply credentials from `config.json`, restart NetworkManager,
+and finally reboot — with a persistent flag file
+(`/var/lib/dashboard-project/wifi-reboot-attempted`) to prevent a reboot loop
+if WiFi genuinely stays down. On successful recovery it signals the browser
+watchdog (via `/tmp/wifi-recovered`, configurable) to reload the dashboard.
 
-**Manual Start:**
-```bash
-./kiosk/kiosk.sh
-```
+Manual test harness: `sudo bash ./test-wifi-watchdog.sh` disconnects WiFi
+under a systemd scope (survives SSH disconnects) with a safety net to restore
+connectivity; watch it with `journalctl -u wifi-test --no-pager`.
 
-**Exit Kiosk Mode (via SSH):**
-```bash
-ssh user@dashboard.local
-pkill chromium
-```
+### Browser watchdog
 
-### Touchscreen Service Management
+`watchdog/browser-watchdog.service` polls Chromium's current URL via the
+Chrome DevTools Protocol (`--remote-debugging-port=9222`, set in
+`kiosk.sh`). If the browser has been away from the dashboard URL longer than
+`browser.inactivity_timeout_seconds` (default 5 minutes), or a WiFi-recovery
+signal appears, it kills Chromium so the kiosk restart loop relaunches it at
+the dashboard URL.
 
-The touchscreen auto-recovery service runs automatically on boot. To manage it manually:
+### Scheduled reboot
 
-```bash
-# Check service status
-systemctl status touchscreen-check.service
+`scheduled-reboot.timer` performs a soft reboot every
+`browser.scheduled_reboot_interval_hours` (default 48h) as a periodic reset.
 
-# View service logs
-journalctl -u touchscreen-check.service -f
+## MQTT display control
 
-# Temporarily disable auto-reboot (e.g., for troubleshooting)
-sudo systemctl disable touchscreen-check.service
+The `mqtt-listener` service (installed as a **systemd user service** — it
+needs the graphical session to reach the Wayland compositor for `wlopm`)
+subscribes to a command topic and publishes status/availability.
 
-# Re-enable auto-reboot
-sudo systemctl enable touchscreen-check.service
-```
+- **Command topic** (subscribe): `dashboard/display/command` — accepts `on`, `off`, `status`
+- **Status topic** (publish): `dashboard/display/status` — `on`, `off`, `unknown`
+- **Availability topic** (publish): `dashboard/display/availability` — `online`, `offline`
 
-### MQTT Display Control
+Topics are configurable in `config.json`. On first connection the listener
+publishes a retained MQTT auto-discovery payload, so the display switch
+entity (`switch.dashboard_display`) appears in Home Assistant without manual
+configuration.
 
-The dashboard integrates with Home Assistant via MQTT for remote display power management. The display entity is auto-discovered by Home Assistant -- no manual configuration.yaml editing is needed.
-
-On first connection, the MQTT listener publishes a discovery payload to Home Assistant. This creates a "Dashboard Pi" device with a display power switch entity that you can use in automations and the HA dashboard.
-
-#### MQTT Topics
-
-The `mqtt-listener.service` subscribes and publishes to these topics (configurable in `config.json`):
-
-- **Command Topic** (subscribe): `dashboard/display/command`
-  - Accepts: `on`, `off`, `status`
-- **Status Topic** (publish): `dashboard/display/status`
-  - Publishes: `on`, `off`, `unknown`
-- **Availability Topic** (publish): `dashboard/display/availability`
-  - Publishes: `online`, `offline`
-
-#### Service Management
+### Service management
 
 ```bash
-# Check service status
-systemctl status mqtt-listener.service
+# mqtt-listener is a user service
+systemctl --user status mqtt-listener.service
+journalctl --user -u mqtt-listener -f
+systemctl --user restart mqtt-listener.service
 
-# View logs
-journalctl -u mqtt-listener.service -f
-
-# Start/stop/restart service
-sudo systemctl start mqtt-listener.service
-sudo systemctl stop mqtt-listener.service
-sudo systemctl restart mqtt-listener.service
+# everything else is a system service
+systemctl status touchscreen-check.service wifi-watchdog.timer browser-watchdog.service
+journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -f
 ```
 
-#### Manual Testing
-
-You can test MQTT commands directly using `mosquitto_pub` (from your Home Assistant server or any MQTT client):
+### Manual testing
 
 ```bash
-# Turn display on
-mosquitto_pub -h <broker-ip> -u <username> -P <password> \
-  -t "dashboard/display/command" -m "on"
-
-# Turn display off
-mosquitto_pub -h <broker-ip> -u <username> -P <password> \
-  -t "dashboard/display/command" -m "off"
-
-# Request status update
-mosquitto_pub -h <broker-ip> -u <username> -P <password> \
-  -t "dashboard/display/command" -m "status"
-
-# Subscribe to status updates
-mosquitto_sub -h <broker-ip> -u <username> -P <password> \
-  -t "dashboard/display/status"
+mosquitto_pub -h <broker-ip> -u <username> -P <password> -t "dashboard/display/command" -m "on"
+mosquitto_pub -h <broker-ip> -u <username> -P <password> -t "dashboard/display/command" -m "off"
+mosquitto_sub -h <broker-ip> -u <username> -P <password> -t "dashboard/display/status"
 ```
 
-#### Home Assistant Automations
+Or directly on the Pi:
 
-With auto-discovery, the display switch entity is available as `switch.dashboard_display`. You can use it directly in automations:
+```bash
+python3 ~/dashboard-project/display/display_control.py on
+python3 ~/dashboard-project/display/display_control.py off
+python3 ~/dashboard-project/display/display_control.py status   # queries actual hardware state via wlopm
+```
 
-**Example 1: Turn display on when motion detected**
+### Home Assistant automation examples
 
 ```yaml
 automation:
@@ -318,12 +272,7 @@ automation:
       - service: switch.turn_on
         target:
           entity_id: switch.dashboard_display
-```
 
-**Example 2: Turn display off at bedtime**
-
-```yaml
-automation:
   - alias: "Dashboard Display Off - Bedtime"
     trigger:
       - platform: time
@@ -334,114 +283,69 @@ automation:
           entity_id: switch.dashboard_display
 ```
 
-**Example 3: Turn display on in the morning**
+## Development workflow
 
-```yaml
-automation:
-  - alias: "Dashboard Display On - Morning"
-    trigger:
-      - platform: time
-        at: "07:00:00"
-    condition:
-      - condition: state
-        entity_id: binary_sensor.workday
-        state: "on"
-    action:
-      - service: switch.turn_on
-        target:
-          entity_id: switch.dashboard_display
-```
-
-#### Manual Display Control
-
-You can also control the display directly on the Pi:
+`main` is production; feature branches (`feat/...`, `fix/...`) are for
+development. Develop on a laptop, push, then deploy to the Pi with one
+command:
 
 ```bash
-# Turn display on/off manually
-python3 ~/dashboard-project/display/display_control.py on
-python3 ~/dashboard-project/display/display_control.py off
-
-# Check current power state (queries actual hardware via wlopm)
-python3 ~/dashboard-project/display/display_control.py status
-```
-
-## Development Workflow
-
-### Switching Between Dev and Production
-
-The project uses branches for development. `main` is production, feature branches are for development.
-
-Switch branches with one command:
-
-```bash
-./setup/switch-branch.sh <branch-name>
+ssh pi '~/dashboard-project/setup/switch-branch.sh <branch-name>'
 ```
 
 This will:
-1. Check for uncommitted changes (aborts if any found)
-2. Verify the target branch exists
-3. Switch to the target branch
-4. Regenerate systemd service files for the new branch paths
-5. Restart services
-6. Run verify.sh to confirm everything works
+1. Abort if the Pi has uncommitted changes (investigate, don't force).
+2. Fetch from origin and switch to the target branch.
+3. Regenerate systemd unit files (paths can differ between branches) and
+   restart the long-running services (`mqtt-listener`, `browser-watchdog`) so
+   the new code takes effect immediately.
+4. Run `verify.sh`.
 
-**Examples:**
+**Note:** `config.json` is git-ignored, so it persists across branch
+switches. If switching to a branch never bootstrapped on this Pi, run
+`./setup/bootstrap.sh` afterward.
+
+When a change survives a real reboot (`ssh pi sudo reboot`, wait ~3 min,
+verify again), merge to `main` and switch the Pi back:
+
 ```bash
-./setup/switch-branch.sh main           # Switch to production
-./setup/switch-branch.sh phase-2-dev    # Switch to development branch
+ssh pi '~/dashboard-project/setup/switch-branch.sh main'
 ```
-
-**Note:** `config.json` is git-ignored, so it persists across branch switches. If switching to a branch that has never been bootstrapped on this Pi, run `./setup/bootstrap.sh` after switching.
 
 ## Recovery
 
-### Fast Recovery from SD Card Failure
+### Fast recovery from SD card failure
 
-If your SD card fails or you need to set up a fresh Pi:
+1. Flash a fresh Raspberry Pi OS (64-bit Desktop; configure SSH/WiFi/hostname).
+2. Clone the repo: `git clone <your-repo-url> dashboard-project && cd dashboard-project`
+3. Run bootstrap: `./setup/bootstrap.sh`
+4. Restore your config backup (if you have one): `./setup/config-restore.sh /path/to/backup.json`
+5. Reboot: `sudo reboot`
 
-1. **Flash a fresh Raspberry Pi OS** using Raspberry Pi Imager (64-bit Desktop, configure SSH/WiFi/hostname)
-2. **Clone the repo:**
-   ```bash
-   cd ~
-   git clone <your-repo-url> dashboard-project
-   cd dashboard-project
-   ```
-3. **Run bootstrap:**
-   ```bash
-   ./setup/bootstrap.sh
-   ```
-4. **Restore your config backup** (if you have one):
-   ```bash
-   ./setup/config-restore.sh /path/to/backup.json
-   ```
-5. **Reboot:**
-   ```bash
-   sudo reboot
-   ```
+**A config backup is essential for fast recovery.** Without one you'll
+re-enter every configuration value (MQTT credentials, dashboard URL, WiFi
+password, etc.) during the bootstrap prompts. With one, steps 3-5 take under
+a minute.
 
-**Config backup is essential for fast recovery.** Without a backup, you will need to re-enter all configuration values (MQTT credentials, dashboard URL, WiFi password, etc.) during the bootstrap prompts. With a backup, steps 3-5 take under a minute.
-
-### Keeping a Config Backup
-
-Back up your configuration after any changes:
+### Keeping a config backup
 
 ```bash
 ./setup/config-backup.sh ~/dashboard-config-backup.json
 ```
 
-Store the backup file somewhere off the Pi (USB drive, cloud storage, another machine). The file contains MQTT credentials, so keep it secure.
+Store it off the Pi (USB drive, cloud storage, another machine) — it
+contains MQTT and WiFi credentials, so keep it secure.
 
 ## Resources
 
 - [Home Assistant Documentation](https://www.home-assistant.io/docs/)
 - [Raspberry Pi Documentation](https://www.raspberrypi.org/documentation/)
-- [GPIO Zero Documentation](https://gpiozero.readthedocs.io/)
 - [paho-mqtt Documentation](https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html)
 
-## Project Goals
+## Project goals
 
-1. **Primary:** Wall-mounted family chore management system
-2. **Secondary:** Multi-function dashboard (calendar, smart home, weather)
-3. **Aesthetic:** High WAF (Wife Acceptance Factor) - clean, modern interface
-4. **Location:** Prominent area in home - needs to look good and be functional
-5. **Maintenance:** Minimal physical access required after installation
+1. **Primary:** wall-mounted family chore/week-planner dashboard
+2. **Secondary:** general-purpose dashboard (calendar, smart home, weather)
+3. **Reliability:** cold boot to a working, touch-responsive dashboard with
+   zero human intervention
+4. **Maintenance:** minimal physical access required after installation

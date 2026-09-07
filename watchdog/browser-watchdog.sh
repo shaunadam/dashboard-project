@@ -19,12 +19,13 @@ DASHBOARD_URL="$(cfg_require '.dashboard.url')"
 
 # Load configuration (optional values with sensible defaults)
 INACTIVITY_TIMEOUT="$(cfg_get '.browser.inactivity_timeout_seconds')"
-INACTIVITY_TIMEOUT="${INACTIVITY_TIMEOUT:-600}"
+INACTIVITY_TIMEOUT="${INACTIVITY_TIMEOUT:-300}"
 LOG_TAG="$(cfg_get '.system.log_tag_browser')"
 LOG_TAG="${LOG_TAG:-browser-watchdog}"
 
 # WiFi recovery signal file (touched by wifi-watchdog.sh after successful recovery)
-WIFI_RECOVERY_SIGNAL="/tmp/wifi-recovered"
+WIFI_RECOVERY_SIGNAL="$(cfg_get '.system.wifi_recovery_signal_file')"
+WIFI_RECOVERY_SIGNAL="${WIFI_RECOVERY_SIGNAL:-/tmp/wifi-recovered}"
 
 # Track when we first noticed the browser was away from the dashboard
 AWAY_SINCE=0

@@ -39,8 +39,9 @@
     "scheduled_reboot_interval_hours": 48
   },
   "system": {
-    "reboot_flag_file": "/var/run/touchscreen-reboot-attempted",
-    "reboot_flag_file_wifi": "/var/run/wifi-reboot-attempted",
+    "reboot_flag_file": "/var/lib/dashboard-project/touchscreen-reboot-attempted",
+    "reboot_flag_file_wifi": "/var/lib/dashboard-project/wifi-reboot-attempted",
+    "wifi_recovery_signal_file": "/tmp/wifi-recovered",
     "log_tag_touchscreen": "touchscreen-check",
     "log_tag_kiosk": "kiosk",
     "log_tag_wifi": "wifi-watchdog",
