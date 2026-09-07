@@ -286,31 +286,64 @@ automation:
 ## Development workflow
 
 `main` is production; feature branches (`feat/...`, `fix/...`) are for
-development. Develop on a laptop, push, then deploy to the Pi with one
-command:
+development. The Pi never receives files directly (**no `scp`, ever**) — it
+only ever syncs itself from GitHub via `git pull`, wrapped by
+`switch-branch.sh`. Everything is edited on a laptop.
 
-```bash
-ssh pi '~/dashboard-project/setup/switch-branch.sh <branch-name>'
-```
+### The loop
 
-This will:
-1. Abort if the Pi has uncommitted changes (investigate, don't force).
-2. Fetch from origin and switch to the target branch.
-3. Regenerate systemd unit files (paths can differ between branches) and
-   restart the long-running services (`mqtt-listener`, `browser-watchdog`) so
-   the new code takes effect immediately.
-4. Run `verify.sh`.
+1. **Branch and edit on your laptop:**
+   ```bash
+   git checkout -b feat/whatever main
+   # edit, test what you can locally (see Testing below)
+   git add -A && git commit -m "..."
+   git push -u origin feat/whatever
+   ```
+
+2. **Deploy to the Pi with one command:**
+   ```bash
+   ssh pi '~/dashboard-project/setup/switch-branch.sh feat/whatever'
+   ```
+   This aborts if the Pi has uncommitted changes (investigate, don't force —
+   that's the Pi telling you something's there it doesn't expect). Otherwise
+   it will:
+   1. Fetch from origin and switch to the target branch.
+   2. Regenerate systemd unit files (paths can differ between branches) and
+      restart the long-running services (`mqtt-listener`, `browser-watchdog`)
+      so the new code takes effect immediately.
+   3. Run `verify.sh`.
+
+3. **Check it actually worked** — `verify.sh` only confirms things are
+   installed/enabled, not that they behave correctly, so also look at the
+   touchscreen and check logs:
+   ```bash
+   ssh pi '~/dashboard-project/setup/verify.sh'
+   ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -n 100 --no-pager'
+   ssh pi 'journalctl --user -u mqtt-listener -n 50 --no-pager'   # mqtt-listener is a user service
+   ```
+
+4. **If the change touches boot behavior, reboot-test before trusting it:**
+   ```bash
+   ssh pi sudo reboot
+   # wait ~3 min
+   ssh pi '~/dashboard-project/setup/verify.sh'
+   ```
+
+5. **Once it's solid, merge to `main` on your laptop and switch the Pi back:**
+   ```bash
+   git checkout main && git merge feat/whatever && git push
+   ssh pi '~/dashboard-project/setup/switch-branch.sh main'
+   ```
 
 **Note:** `config.json` is git-ignored, so it persists across branch
 switches. If switching to a branch never bootstrapped on this Pi, run
 `./setup/bootstrap.sh` afterward.
 
-When a change survives a real reboot (`ssh pi sudo reboot`, wait ~3 min,
-verify again), merge to `main` and switch the Pi back:
+### Testing without the Pi
 
-```bash
-ssh pi '~/dashboard-project/setup/switch-branch.sh main'
-```
+Unit-test `mqtt/` and `display/` with mocked `subprocess`/`paho`. Anything
+touching `wlopm`, Chromium CDP, `nmcli`, or USB needs the real Pi — say so in
+the commit/PR message rather than claiming it's verified.
 
 ## Recovery
 
