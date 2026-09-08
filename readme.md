@@ -58,8 +58,9 @@ auto-reboot). A normal `sudo reboot` reaches the dashboard immediately.
 
 ```
 dashboard-project/
-├── config.json.template        # Configuration schema reference
-├── config.json                 # Active config (git-ignored, created by bootstrap)
+├── config.json                 # Non-secret configuration (tracked in git)
+├── secrets.json.template       # Schema for the credentials file
+├── secrets.json                # Credentials only (git-ignored, mode 600)
 ├── lib/
 │   ├── config.sh                # Bash config loader (cfg_get, cfg_require)
 │   └── config.py                # Python config loader (get, require)
@@ -77,8 +78,9 @@ dashboard-project/
 ├── setup/
 │   ├── bootstrap.sh                # Automated provisioning
 │   ├── verify.sh                   # Post-setup verification
-│   ├── config-backup.sh            # Export config to backup
-│   ├── config-restore.sh           # Restore config from backup
+│   ├── config-backup.sh            # Export secrets.json to a backup
+│   ├── config-restore.sh           # Restore secrets.json from a backup
+│   ├── migrate-secrets.sh          # Pull credentials out of a pre-split config.json
 │   ├── switch-branch.sh            # Switch branch + regenerate services + restart
 │   └── systemd-units.sh            # Shared systemd unit definitions (sourced by
 │                                    #   bootstrap.sh and switch-branch.sh)
@@ -98,8 +100,9 @@ Run after cloning to a fresh Pi:
 
 Bootstrap will:
 - Install required apt packages (jq, chromium, unclutter, onboard, etc.)
-- Prompt for configuration values (dashboard URL, MQTT credentials, WiFi, etc.)
-  and generate `config.json`
+- Prompt for the four credentials (MQTT username/password, WiFi SSID/password)
+  and generate `secrets.json`. Everything else is already in the tracked
+  `config.json`, so there is nothing else to type.
 - Create the persistent state directory (`/var/lib/dashboard-project`) used
   for boot-loop-protection flag files
 - Create systemd service/timer files and the kiosk autostart entry
@@ -150,29 +153,66 @@ Autostart is configured automatically by `setup/bootstrap.sh`.
 
 ## Configuration management
 
-All project configuration lives in a single `config.json` at the repo root.
-It's git-ignored so credentials are never committed; the schema (with
-placeholder tokens) lives in `config.json.template`.
+Configuration is split across two files at the repo root, deep-merged by
+`lib/config.sh` and `lib/config.py` at load time (secrets win). Every consumer
+just asks for a path like `.mqtt.password` and never knows which file the
+value came from.
+
+| File | Tracked in git? | Contents |
+|------|-----------------|----------|
+| `config.json` | **Yes** | Everything that isn't a credential |
+| `secrets.json` | No — git-ignored, mode 600 | `mqtt.username`, `mqtt.password`, `wifi.ssid`, `wifi.password` |
+
+That split is what makes the push/pull workflow work: changing a timeout, the
+dashboard URL, or a log tag is an ordinary commit that reaches the Pi via
+`git pull`, while the four credentials never leave the device. `secrets.json`
+mirrors `config.json`'s structure, so its schema is just
+`secrets.json.template`.
 
 | Section | Values |
 |---------|--------|
 | `dashboard` | Home Assistant dashboard URL |
-| `mqtt` | Broker address, port, username, password, client ID, topics, heartbeat interval |
+| `mqtt` | Broker address, port, client ID, topics, heartbeat interval (**username/password from `secrets.json`**) |
 | `display` | Wayland display name |
 | `touchscreen` | USB device ID, detection wait time |
 | `kiosk` | Desktop load wait, on-screen keyboard size, Chromium data directory |
-| `wifi` | SSID, password (used by the WiFi watchdog to reapply credentials) |
+| `wifi` | **SSID and password, from `secrets.json`** (used by the WiFi watchdog to reapply credentials) |
 | `home_assistant` | Auth method |
 | `browser` | Inactivity timeout (auto-return to dashboard), scheduled reboot interval |
 | `system` | Reboot flag file paths, WiFi recovery signal file, log tags |
 
+`setup/verify.sh` enforces both halves of the deal: it fails if a credential
+key ever appears in the tracked `config.json`, and if `secrets.json` isn't
+actually git-ignored.
+
+The Pi's LAN address (`192.168.68.75`) is committed. It's an RFC1918 private
+address that means nothing outside the network; if you'd rather it weren't in
+a public repo, move `dashboard.url` and `mqtt.broker` into `secrets.json` —
+the loaders need no change, since the merge is structural.
+
+### Upgrading from the old single-file layout
+
+Older checkouts had one git-ignored `config.json` holding everything. To
+convert without retyping passwords:
+
+```bash
+mv config.json config.json.legacy
+git pull                                        # brings in the tracked config.json
+./setup/migrate-secrets.sh config.json.legacy   # writes secrets.json (mode 600)
+rm config.json.legacy
+```
+
+`setup/bootstrap.sh` does the same automatically if it finds a
+`config.json.legacy` next to it.
+
 ### Backup
 
 ```bash
-./setup/config-backup.sh /path/to/backup.json   # defaults to ~/dashboard-config-backup.json
+./setup/config-backup.sh /path/to/backup.json   # defaults to ~/dashboard-secrets-backup.json
 ```
 
-The backup contains MQTT and WiFi credentials — store it securely, off the Pi.
+Only `secrets.json` needs backing up — `config.json` is in git. The backup
+contains MQTT and WiFi credentials, so store it securely, off the Pi.
 
 ### Restore
 
@@ -181,7 +221,8 @@ The backup contains MQTT and WiFi credentials — store it securely, off the Pi.
 ```
 
 Validates the backup (JSON syntax, required keys) before applying it, then
-restarts the affected services.
+restarts the affected services. It also accepts an old pre-split
+`config.json`, taking only the credential keys from it.
 
 ## Resilience
 
@@ -191,7 +232,7 @@ restarts the affected services.
 validates connectivity in stages (device state → gateway ping → public DNS →
 DNS resolution → HTTP check to the dashboard) and, on failure, works through
 increasingly disruptive recovery steps: reconnect the WiFi device, cycle the
-connection, reapply credentials from `config.json`, restart NetworkManager,
+connection, reapply credentials from `secrets.json`, restart NetworkManager,
 and finally reboot — with a persistent flag file
 (`/var/lib/dashboard-project/wifi-reboot-attempted`) to prevent a reboot loop
 if WiFi genuinely stays down. On successful recovery it signals the browser
@@ -335,9 +376,10 @@ only ever syncs itself from GitHub via `git pull`, wrapped by
    ssh pi '~/dashboard-project/setup/switch-branch.sh main'
    ```
 
-**Note:** `config.json` is git-ignored, so it persists across branch
-switches. If switching to a branch never bootstrapped on this Pi, run
-`./setup/bootstrap.sh` afterward.
+**Note:** `secrets.json` is git-ignored, so credentials persist across branch
+switches; `config.json` is tracked, so settings changes ride along with the
+branch. If `secrets.json` is missing after a switch, run
+`./setup/bootstrap.sh`.
 
 ### Testing without the Pi
 
@@ -351,9 +393,14 @@ the commit/PR message rather than claiming it's verified.
 
 1. Flash a fresh Raspberry Pi OS (64-bit Desktop; configure SSH/WiFi/hostname).
 2. Clone the repo: `git clone <your-repo-url> dashboard-project && cd dashboard-project`
-3. Run bootstrap: `./setup/bootstrap.sh`
-4. Restore your config backup (if you have one): `./setup/config-restore.sh /path/to/backup.json`
+3. Restore your secrets backup (if you have one):
+   `./setup/config-restore.sh /path/to/backup.json` — otherwise bootstrap will
+   prompt for the four credentials
+4. Run bootstrap: `./setup/bootstrap.sh`
 5. Reboot: `sudo reboot`
+
+Everything except the four credentials is restored by the `git clone` itself,
+since `config.json` is tracked.
 
 **A config backup is essential for fast recovery.** Without one you'll
 re-enter every configuration value (MQTT credentials, dashboard URL, WiFi

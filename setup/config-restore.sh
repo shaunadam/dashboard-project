@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+# Restore secrets.json from a backup made by config-backup.sh. Also accepts an
+# old single-file config.json, from which only the credential keys are taken.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CONFIG_FILE="${REPO_ROOT}/config.json"
+SECRETS_FILE="${REPO_ROOT}/secrets.json"
 
 log() { echo "[config-restore] $*"; }
 
@@ -26,7 +28,7 @@ if ! jq empty "${BACKUP}" 2>/dev/null; then
 fi
 
 # Validate required keys
-required_keys=(".dashboard.url" ".mqtt.broker" ".mqtt.port" ".touchscreen.usb_device_id")
+required_keys=(".mqtt.username" ".mqtt.password" ".wifi.ssid" ".wifi.password")
 for key in "${required_keys[@]}"; do
   if [[ "$(jq -r "${key} // empty" "${BACKUP}")" == "" ]]; then
     log "ERROR: Backup missing required key: ${key}"
@@ -34,10 +36,21 @@ for key in "${required_keys[@]}"; do
   fi
 done
 
-# Restore
-cp "${BACKUP}" "${CONFIG_FILE}"
-chmod 600 "${CONFIG_FILE}"
-log "Configuration restored from: ${BACKUP}"
+# Copy across only the credential keys. A backup of an old single-file
+# config.json would otherwise shadow values that now live in config.json.
+jq '{
+  mqtt: {
+    username: .mqtt.username,
+    password: .mqtt.password
+  },
+  wifi: {
+    ssid: .wifi.ssid,
+    password: .wifi.password
+  }
+}' "${BACKUP}" > "${SECRETS_FILE}"
+
+chmod 600 "${SECRETS_FILE}"
+log "Secrets restored from: ${BACKUP}"
 
 # Restart services if systemd is available
 if command -v systemctl >/dev/null 2>&1; then

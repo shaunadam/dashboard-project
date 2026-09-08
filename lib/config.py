@@ -1,10 +1,16 @@
 """Shared configuration loader for Python scripts.
 
+Configuration is split across two files, both at the repo root:
+    config.json   - tracked in git. Everything that is not a secret.
+    secrets.json  - git-ignored, chmod 600. Credentials only.
+They are deep-merged on load (secrets win), so callers just ask for a
+dot-path and never care which file a value came from.
+
 Usage:
     from lib.config import get, require
 
     url = get("dashboard.url")
-    broker = require("mqtt.broker")
+    password = require("mqtt.password")
 """
 
 import json
@@ -16,36 +22,66 @@ class ConfigError(Exception):
     """Raised when a required configuration value is missing."""
 
 
-# Derive config path from this file's location (lib/ is one level below root).
-CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
+# Derive config paths from this file's location (lib/ is one level below root).
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_FILE = REPO_ROOT / "config.json"
+SECRETS_FILE = REPO_ROOT / "secrets.json"
 
-# Module-level cache for the parsed config dict.
+# Module-level cache for the merged config dict.
 _config_cache: Optional[dict] = None
 
 
-def load_config(path: Optional[Path] = None) -> dict:
-    """Load and return the full configuration dictionary.
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    """Return *base* with *overlay* merged in, recursing into nested dicts.
 
-    Results are cached so repeated calls don't re-read the file.
-    Pass an explicit *path* to override the default location (useful for tests).
+    Mirrors jq's `*` operator, which lib/config.sh uses for the same job.
+    """
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _read_json(path: Path, hint: str) -> dict:
+    if not path.exists():
+        raise ConfigError(f"Configuration file not found: {path}\n{hint}")
+    with open(path, "r") as fh:
+        return json.load(fh)
+
+
+def load_config(
+    path: Optional[Path] = None,
+    secrets_path: Optional[Path] = None,
+) -> dict:
+    """Load, merge and return the full configuration dictionary.
+
+    Results are cached so repeated calls don't re-read the files. Pass
+    explicit paths to override the default locations (useful for tests);
+    overridden loads are never cached.
     """
     global _config_cache
 
-    config_path = path or CONFIG_FILE
+    use_defaults = path is None and secrets_path is None
 
-    if _config_cache is not None and path is None:
+    if _config_cache is not None and use_defaults:
         return _config_cache
 
-    if not config_path.exists():
-        raise ConfigError(
-            f"Configuration file not found: {config_path}\n"
-            "Run setup/bootstrap.sh to generate config.json from the template."
-        )
+    config = _read_json(
+        path or CONFIG_FILE,
+        "config.json is tracked in git — check out the repo again.",
+    )
+    secrets = _read_json(
+        secrets_path or SECRETS_FILE,
+        "Create it with setup/bootstrap.sh, setup/migrate-secrets.sh, "
+        "or setup/config-restore.sh <backup.json>.",
+    )
 
-    with open(config_path, "r") as fh:
-        data = json.load(fh)
+    data = _deep_merge(config, secrets)
 
-    if path is None:
+    if use_defaults:
         _config_cache = data
 
     return data
@@ -75,6 +111,6 @@ def require(key_path: str) -> Any:
     if value is None:
         raise ConfigError(
             f"Required config value missing: {key_path}\n"
-            f"Check {CONFIG_FILE} and ensure the value is set."
+            f"Check {CONFIG_FILE} and {SECRETS_FILE} and ensure the value is set."
         )
     return value
