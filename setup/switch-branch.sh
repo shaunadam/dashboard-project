@@ -68,8 +68,8 @@ if command -v systemctl >/dev/null 2>&1; then
     log "Restarting long-running services to pick up new code..."
     # mqtt-listener is a systemd *user* service (needs the graphical session
     # for wlopm); browser-watchdog is a system service running as $USER.
-    # touchscreen-check/wifi-ensure only run at boot and wifi-watchdog is
-    # timer-triggered, so none of those need restarting here.
+    # wifi-ensure only runs at boot and wifi-watchdog is timer-triggered, so
+    # neither needs restarting here.
     systemctl --user restart mqtt-listener.service 2>/dev/null && log "mqtt-listener restarted" || log "WARNING: mqtt-listener restart failed"
     sudo systemctl restart browser-watchdog.service 2>/dev/null && log "browser-watchdog restarted" || log "WARNING: browser-watchdog restart failed"
     log "Services updated."

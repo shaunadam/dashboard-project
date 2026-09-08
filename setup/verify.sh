@@ -40,7 +40,7 @@ check_config() {
     return
   fi
   # Check required keys
-  local required_keys=(".dashboard.url" ".mqtt.broker" ".mqtt.port" ".touchscreen.usb_device_id" ".system.reboot_flag_file" ".system.reboot_flag_file_wifi" ".system.wifi_recovery_signal_file")
+  local required_keys=(".dashboard.url" ".mqtt.broker" ".mqtt.port" ".system.reboot_flag_file_wifi" ".system.wifi_recovery_signal_file")
   for key in "${required_keys[@]}"; do
     if [[ "$(jq -r "${key} // empty" "${config}")" == "" ]]; then
       issues+=("config.json missing required key: ${key}")
@@ -123,21 +123,17 @@ check_kiosk_script() {
   fi
 }
 
-check_touchscreen_service() {
-  if [[ ! -f "${REPO_ROOT}/touchscreen/touchscreen-check.sh" ]]; then
-    issues+=("touchscreen-check.sh not found")
-    return
-  fi
-
-  if [[ ! -x "${REPO_ROOT}/touchscreen/touchscreen-check.sh" ]]; then
-    issues+=("touchscreen-check.sh is not executable")
-  fi
-
-  if systemctl is-enabled touchscreen-check.service >/dev/null 2>&1; then
-    log "touchscreen-check.service is enabled."
-  else
-    issues+=("touchscreen-check.service is not enabled; run bootstrap.sh or: sudo systemctl enable touchscreen-check.service")
-  fi
+check_retired_units() {
+  # The touchscreen was removed from this project. Catch a Pi still carrying
+  # the old unit — it would fail at boot looking for a script that's gone.
+  local retired=(touchscreen-check.service)
+  local unit
+  for unit in "${retired[@]}"; do
+    if systemctl list-unit-files "${unit}" 2>/dev/null | grep -q "${unit}"; then
+      issues+=("Retired unit still installed: ${unit} — run setup/switch-branch.sh (or bootstrap.sh) to remove it")
+    fi
+  done
+  log "No retired units installed."
 }
 
 check_mqtt_listener() {
@@ -214,7 +210,6 @@ main() {
   log "Starting verification..."
   require_command chromium-browser
   require_command unclutter
-  require_command onboard
   require_command wlopm
   require_command git
   require_command curl
@@ -226,7 +221,7 @@ main() {
   check_libraries
   check_autostart
   check_kiosk_script
-  check_touchscreen_service
+  check_retired_units
   check_mqtt_listener
   check_display_control
   check_wifi_watchdog

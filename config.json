@@ -16,13 +16,8 @@
   "display": {
     "wayland_display": "wayland-0"
   },
-  "touchscreen": {
-    "usb_device_id": "222a:0001",
-    "detection_wait_seconds": 60
-  },
   "kiosk": {
     "desktop_load_wait_seconds": 10,
-    "onboard_size": "800x300",
     "user_data_dir": "/home/shaun/.config/chromium-kiosk"
   },
   "home_assistant": {
@@ -33,10 +28,8 @@
     "scheduled_reboot_interval_hours": 48
   },
   "system": {
-    "reboot_flag_file": "/var/lib/dashboard-project/touchscreen-reboot-attempted",
     "reboot_flag_file_wifi": "/var/lib/dashboard-project/wifi-reboot-attempted",
     "wifi_recovery_signal_file": "/tmp/wifi-recovered",
-    "log_tag_touchscreen": "touchscreen-check",
     "log_tag_kiosk": "kiosk",
     "log_tag_wifi": "wifi-watchdog",
     "log_tag_browser": "browser-watchdog"
