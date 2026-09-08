@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Kiosk launcher — starts Chromium in fullscreen kiosk mode.
-# Includes touch-friendly flags, crash state cleanup, and restart loop.
+# Includes crash state cleanup and a restart loop.
 # All configurable values are loaded from config.json via lib/config.sh.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,8 +14,6 @@ DASHBOARD_URL="$(cfg_require '.dashboard.url')"
 LOAD_WAIT="$(cfg_get '.kiosk.desktop_load_wait_seconds')"
 LOAD_WAIT="${LOAD_WAIT:-10}"
 USER_DATA_DIR="$(cfg_require '.kiosk.user_data_dir')"
-ONBOARD_SIZE="$(cfg_get '.kiosk.onboard_size')"
-ONBOARD_SIZE="${ONBOARD_SIZE:-800x300}"
 LOG_TAG="$(cfg_get '.system.log_tag_kiosk')"
 LOG_TAG="${LOG_TAG:-kiosk}"
 
@@ -30,11 +28,9 @@ export DISPLAY=:0
 # Wait for desktop to load
 sleep "$LOAD_WAIT"
 
-# Hide mouse cursor
+# Hide the mouse cursor while it sits idle, so the wall display stays clean.
+# Moving the wireless mouse brings it straight back.
 unclutter -idle 0.1 &
-
-# Start on-screen keyboard (auto-shows on text field focus)
-GDK_BACKEND=x11 onboard --size="$ONBOARD_SIZE" &
 
 # Disable screen blanking
 xset s off
@@ -59,7 +55,7 @@ while true; do
         "${USER_DATA_DIR}/Default/Last Session" \
         "${USER_DATA_DIR}/Default/Last Tabs"
 
-  # Start Chromium in kiosk mode with touch-friendly flags
+  # Start Chromium in kiosk mode.
   # --remote-debugging-port enables CDP (Chrome DevTools Protocol) so
   # browser-watchdog.sh can navigate back to the dashboard URL after idle
   # timeout, rather than just refreshing the current page.
@@ -76,9 +72,7 @@ while true; do
     --password-store=basic \
     --display=:0 \
     --user-data-dir="$USER_DATA_DIR" \
-    --disable-touch-drag-drop \
     --overscroll-history-navigation=0 \
-    --disable-pinch \
     --remote-debugging-port=9222 \
     "$DASHBOARD_URL"
 

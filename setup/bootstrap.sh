@@ -17,7 +17,6 @@ APT_PACKAGES=(
   python3-paho-mqtt
   unclutter
   chromium-browser
-  onboard
 )
 
 log() {
@@ -136,7 +135,6 @@ enable_persistent_journal() {
 
 make_scripts_executable() {
   chmod +x "${REPO_ROOT}/kiosk/kiosk.sh"
-  chmod +x "${REPO_ROOT}/touchscreen/touchscreen-check.sh"
   chmod +x "${REPO_ROOT}/mqtt/mqtt_listener.py"
   chmod +x "${REPO_ROOT}/display/display_control.py"
   chmod +x "${REPO_ROOT}/watchdog/wifi-watchdog.sh"

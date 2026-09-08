@@ -1,12 +1,14 @@
 # Dashboard Pi — Claude context
 
-Wall-mounted Raspberry Pi 4 + 15" USB touchscreen running Chromium in kiosk mode
-showing a Home Assistant dashboard. Raspberry Pi OS 64-bit, Wayland, hostname
+Wall-mounted Raspberry Pi 4 + 15" display running Chromium in kiosk mode showing a
+Home Assistant dashboard. Raspberry Pi OS 64-bit, Wayland, hostname
 `dashboard.local` (ssh alias `pi`). Home Assistant + MQTT broker live on a separate
-VM in the basement; the Pi is a display + MQTT client only.
+VM in the basement; the Pi is a display + MQTT client only. Input is a wireless
+mouse on the Logitech Unifying receiver — the USB touchscreen was removed from the
+project, so don't reintroduce touch handling, `onboard`, or USB enumeration checks.
 
 ## Non-negotiables
-- The Pi must cold-boot to the week planner page with working touch and zero intervention.
+- The Pi must cold-boot to the week planner page with zero intervention.
 - Config is split in two, deep-merged by the loaders (secrets win):
   `config.json` is **tracked** and holds everything non-secret — edit it here and it
   reaches the Pi via `git pull`. `secrets.json` is git-ignored, mode 600, and holds
@@ -25,7 +27,7 @@ VM in the basement; the Pi is a display + MQTT client only.
 3. Deploy to Pi: `ssh pi '~/dashboard-project/setup/switch-branch.sh <branch>'`
    (aborts if the Pi has uncommitted changes — investigate, don't force).
 4. Verify: `ssh pi '~/dashboard-project/setup/verify.sh'`
-5. Logs: `ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -n 100 --no-pager'`
+5. Logs: `ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -n 100 --no-pager'`
    and `ssh pi 'journalctl --user -u mqtt-listener -n 50 --no-pager'` (mqtt-listener is a user service).
 6. When it survives a real reboot (`ssh pi sudo reboot`, wait ~3 min, verify again), merge to `main`
    and switch the Pi back: `ssh pi '~/dashboard-project/setup/switch-branch.sh main'`.
@@ -35,8 +37,11 @@ VM in the basement; the Pi is a display + MQTT client only.
 - `mqtt/` — HA MQTT discovery + display on/off listener
 - `display/display_control.py` — wlopm power control
 - `watchdog/` — wifi + browser watchdogs (root + user services)
-- `touchscreen/` — cold-boot USB re-enumeration fix (one auto-reboot)
 - `setup/` — bootstrap / verify / backup / restore / switch-branch / shared systemd unit definitions
+
+Retiring a systemd unit needs an entry in `OBSOLETE_SYSTEM_UNITS` in
+`setup/systemd-units.sh` — the Pi only updates via `git pull`, so deleting the
+generator leaves the installed unit behind. `setup/verify.sh` flags stragglers.
 
 ## Testing without the Pi
 Unit-test `mqtt/` and `display/` with mocked subprocess/paho. Anything touching wlopm,

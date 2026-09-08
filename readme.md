@@ -1,30 +1,21 @@
 # Dashboard Pi
 
 A wall-mounted Raspberry Pi kiosk that displays a Home Assistant week-planner
-dashboard on a touchscreen. It boots to fullscreen with zero human intervention
-and integrates with Home Assistant via MQTT for remote display power control.
+dashboard. It boots to fullscreen with zero human intervention and integrates
+with Home Assistant via MQTT for remote display power control.
 
 ## Hardware
 
 - **Raspberry Pi 4** (Model B)
-- **15" USB touchscreen** (ILITEK controller, USB ID `222a:0001`)
+- **15" display**
+- **Wireless mouse** (Logitech Unifying receiver) — the only input device
 - MicroSD card (bootable system)
 
-### Touchscreen cold-boot issue
-
-The USB touchscreen controller doesn't reliably enumerate on a cold boot
-(power cycle) but works fine after a warm reboot. `touchscreen-check.service`
-handles this automatically:
-
-1. Waits ~60s after boot for hardware initialization.
-2. Checks whether the touchscreen (`222a:0001`) is detected.
-3. If not, performs **one** automatic reboot (a persistent flag file at
-   `/var/lib/dashboard-project/touchscreen-reboot-attempted` prevents an
-   infinite reboot loop — if the touchscreen is still missing after that one
-   reboot, the service gives up and logs an error for manual investigation).
-
-First boot after a full power loss takes ~2-3 minutes (includes the one
-auto-reboot). A normal `sudo reboot` reaches the dashboard immediately.
+The project previously drove a 15" USB touchscreen (ILITEK controller, USB ID
+`222a:0001`). That panel proved unreliable — it stopped enumerating over USB —
+and was replaced by a wireless mouse. All touchscreen detection, the
+`touchscreen-check` boot service, and the on-screen keyboard have been removed;
+see the git history if you ever need them back.
 
 ### Operating system
 
@@ -38,9 +29,8 @@ auto-reboot). A normal `sudo reboot` reaches the dashboard immediately.
 - **Python 3** + **paho-mqtt** — MQTT client for Home Assistant integration
 - **wlopm** — Wayland display power control (not in apt; see Bootstrap below)
 - **jq** — JSON config generation/parsing in the shell scripts
-- **unclutter** — hides the mouse cursor when idle
-- **onboard** — on-screen keyboard for touch input (e.g. entering WiFi
-  credentials during recovery)
+- **unclutter** — hides the mouse cursor while it's idle, so the wall display
+  stays clean; moving the mouse brings it back
 - **NetworkManager (`nmcli`)** — used by the WiFi watchdog for detection and
   recovery
 
@@ -70,8 +60,6 @@ dashboard-project/
 │   └── display_control.py        # HDMI display power control (wlopm)
 ├── mqtt/
 │   └── mqtt_listener.py          # MQTT subscriber + HA auto-discovery
-├── touchscreen/
-│   └── touchscreen-check.sh      # Boot-time touchscreen detection + one auto-reboot
 ├── watchdog/
 │   ├── wifi-watchdog.sh           # Network failure detection + staged recovery
 │   └── browser-watchdog.sh        # Idle auto-return + WiFi-recovery reload
@@ -99,7 +87,7 @@ Run after cloning to a fresh Pi:
 ```
 
 Bootstrap will:
-- Install required apt packages (jq, chromium, unclutter, onboard, etc.)
+- Install required apt packages (jq, chromium, unclutter, etc.)
 - Prompt for the four credentials (MQTT username/password, WiFi SSID/password)
   and generate `secrets.json`. Everything else is already in the tracked
   `config.json`, so there is nothing else to type.
@@ -147,7 +135,7 @@ After bootstrap completes, confirm everything is configured correctly:
 `kiosk/kiosk.sh` starts Chromium in fullscreen kiosk mode and restarts it if
 it ever exits (crash or otherwise), clearing crash-restore state first so no
 "restore pages?" dialog appears. All configuration (dashboard URL, Chromium
-data directory, on-screen keyboard size) is read from `config.json`.
+data directory) is read from `config.json`.
 
 Autostart is configured automatically by `setup/bootstrap.sh`.
 
@@ -174,12 +162,11 @@ mirrors `config.json`'s structure, so its schema is just
 | `dashboard` | Home Assistant dashboard URL |
 | `mqtt` | Broker address, port, client ID, topics, heartbeat interval (**username/password from `secrets.json`**) |
 | `display` | Wayland display name |
-| `touchscreen` | USB device ID, detection wait time |
-| `kiosk` | Desktop load wait, on-screen keyboard size, Chromium data directory |
+| `kiosk` | Desktop load wait, Chromium data directory |
 | `wifi` | **SSID and password, from `secrets.json`** (used by the WiFi watchdog to reapply credentials) |
 | `home_assistant` | Auth method |
 | `browser` | Inactivity timeout (auto-return to dashboard), scheduled reboot interval |
-| `system` | Reboot flag file paths, WiFi recovery signal file, log tags |
+| `system` | WiFi reboot flag file, WiFi recovery signal file, log tags |
 
 `setup/verify.sh` enforces both halves of the deal: it fails if a credential
 key ever appears in the tracked `config.json`, and if `secrets.json` isn't
@@ -280,9 +267,18 @@ journalctl --user -u mqtt-listener -f
 systemctl --user restart mqtt-listener.service
 
 # everything else is a system service
-systemctl status touchscreen-check.service wifi-watchdog.timer browser-watchdog.service
-journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -f
+systemctl status wifi-watchdog.timer browser-watchdog.service
+journalctl -u browser-watchdog -u wifi-watchdog -f
 ```
+
+### Retiring a service
+
+Deleting a unit from `setup/systemd-units.sh` doesn't uninstall it — the Pi
+only updates via `git pull`, so nothing would ever remove the file already in
+`/etc/systemd/system`. Add the unit name to `OBSOLETE_SYSTEM_UNITS` in
+`setup/systemd-units.sh` instead; `install_systemd_units` disables and deletes
+anything listed there on the next `switch-branch.sh` or `bootstrap.sh` run, and
+`verify.sh` fails if a retired unit is still installed.
 
 ### Manual testing
 
@@ -356,10 +352,10 @@ only ever syncs itself from GitHub via `git pull`, wrapped by
 
 3. **Check it actually worked** — `verify.sh` only confirms things are
    installed/enabled, not that they behave correctly, so also look at the
-   touchscreen and check logs:
+   display and check logs:
    ```bash
    ssh pi '~/dashboard-project/setup/verify.sh'
-   ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -u touchscreen-check -n 100 --no-pager'
+   ssh pi 'journalctl -u browser-watchdog -u wifi-watchdog -n 100 --no-pager'
    ssh pi 'journalctl --user -u mqtt-listener -n 50 --no-pager'   # mqtt-listener is a user service
    ```
 
@@ -426,6 +422,6 @@ contains MQTT and WiFi credentials, so keep it secure.
 
 1. **Primary:** wall-mounted family chore/week-planner dashboard
 2. **Secondary:** general-purpose dashboard (calendar, smart home, weather)
-3. **Reliability:** cold boot to a working, touch-responsive dashboard with
-   zero human intervention
+3. **Reliability:** cold boot to a working dashboard with zero human
+   intervention
 4. **Maintenance:** minimal physical access required after installation

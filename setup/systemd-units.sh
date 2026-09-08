@@ -1,32 +1,47 @@
 #!/usr/bin/env bash
-# Shared systemd unit definitions for touchscreen-check, mqtt-listener (user
-# service), wifi-ensure, wifi-watchdog, browser-watchdog, and scheduled-reboot.
+# Shared systemd unit definitions for mqtt-listener (user service), wifi-ensure,
+# wifi-watchdog, browser-watchdog, and scheduled-reboot.
 #
 # Sourced by bootstrap.sh (initial install) and switch-branch.sh (unit files
 # embed REPO_ROOT, so they must be regenerated whenever the checked-out path
 # could differ). Callers must set REPO_ROOT before sourcing.
 
+# Units this project used to install but no longer does. Regenerating the unit
+# files can't remove a stale one, and the Pi only ever updates itself via
+# git pull, so retiring a unit has to be an explicit step here.
+OBSOLETE_SYSTEM_UNITS=(
+  touchscreen-check.service
+)
+
+# Files left behind by retired units.
+OBSOLETE_STATE_FILES=(
+  /var/lib/dashboard-project/touchscreen-reboot-attempted
+)
+
+remove_obsolete_units() {
+  local unit
+  for unit in "${OBSOLETE_SYSTEM_UNITS[@]}"; do
+    if [[ -f "/etc/systemd/system/${unit}" ]]; then
+      echo "[systemd-units] Removing retired unit: ${unit}"
+      sudo systemctl disable --now "${unit}" >/dev/null 2>&1 || true
+      sudo rm -f "/etc/systemd/system/${unit}"
+    fi
+  done
+
+  local state_file
+  for state_file in "${OBSOLETE_STATE_FILES[@]}"; do
+    if [[ -e "${state_file}" ]]; then
+      echo "[systemd-units] Removing stale state file: ${state_file}"
+      sudo rm -f "${state_file}"
+    fi
+  done
+}
+
 install_systemd_units() {
   local reboot_hours
   reboot_hours=$(jq -r '.browser.scheduled_reboot_interval_hours // 48' "${REPO_ROOT}/config.json" 2>/dev/null || echo "48")
 
-  # Touchscreen check service
-  sudo tee /etc/systemd/system/touchscreen-check.service > /dev/null << EOF
-[Unit]
-Description=Touchscreen Detection and Auto-Reboot Service
-After=multi-user.target
-Wants=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=${REPO_ROOT}/touchscreen/touchscreen-check.sh
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
+  remove_obsolete_units
 
   # MQTT listener — installed as a systemd *user* service so it runs inside
   # the graphical session and can reach the Wayland compositor (wlopm needs it).
@@ -78,7 +93,6 @@ EOF
   sudo tee /etc/systemd/system/wifi-watchdog.timer > /dev/null << EOF
 [Unit]
 Description=WiFi Watchdog Timer
-After=touchscreen-check.service
 
 [Timer]
 OnBootSec=2min
@@ -93,7 +107,7 @@ EOF
   sudo tee /etc/systemd/system/wifi-watchdog.service > /dev/null << EOF
 [Unit]
 Description=WiFi Watchdog Check
-After=network-online.target touchscreen-check.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -107,7 +121,7 @@ EOF
   sudo tee /etc/systemd/system/browser-watchdog.service > /dev/null << EOF
 [Unit]
 Description=Browser Idle Watchdog
-After=graphical.target touchscreen-check.service
+After=graphical.target
 Wants=graphical.target
 StartLimitBurst=5
 StartLimitIntervalSec=300
@@ -152,7 +166,6 @@ StandardError=journal
 EOF
 
   sudo systemctl daemon-reload
-  sudo systemctl enable touchscreen-check.service
   sudo systemctl enable wifi-ensure.service
   sudo systemctl enable wifi-watchdog.timer
   sudo systemctl enable browser-watchdog.service
