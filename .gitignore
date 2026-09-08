@@ -30,3 +30,6 @@ Thumbs.db
 *.local
 secrets.json
 *-secrets-backup.json
+# Pre-split config.json set aside for setup/migrate-secrets.sh. Still full of
+# credentials while it exists, so keep it out of git for that window.
+config.json.legacy
