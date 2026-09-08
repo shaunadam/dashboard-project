@@ -10,7 +10,8 @@ if [[ $# -lt 1 ]]; then
   log "Usage: $0 <branch-name>"
   log ""
   log "Fetches from origin, switches branch, and restarts dashboard services."
-  log "Config is git-ignored, so it persists across switches."
+  log "secrets.json is git-ignored, so credentials persist across switches;"
+  log "config.json is tracked, so settings come along with the branch."
   log ""
   log "Examples:"
   log "  $0 main              # Switch to production"
@@ -49,11 +50,11 @@ log "Switching from '${CURRENT_BRANCH}' to '${TARGET_BRANCH}' (${CHECKOUT_REF}).
 git checkout -B "${TARGET_BRANCH}" "${CHECKOUT_REF}"
 log "Now on branch: $(git branch --show-current)"
 
-# Check if config.json exists (git-ignored, should persist)
-if [[ ! -f "${REPO_ROOT}/config.json" ]]; then
-  log "WARNING: config.json not found after branch switch."
-  log "This branch may need bootstrap.sh to generate config."
-  log "Run: ./setup/bootstrap.sh"
+# Check if secrets.json exists (git-ignored, should persist). config.json is
+# tracked, so the branch switch brings it along.
+if [[ ! -f "${REPO_ROOT}/secrets.json" ]]; then
+  log "WARNING: secrets.json not found after branch switch."
+  log "Run: ./setup/bootstrap.sh   (or ./setup/migrate-secrets.sh <old-config.json>)"
 fi
 
 # Restart services

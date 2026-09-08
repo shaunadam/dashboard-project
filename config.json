@@ -1,12 +1,10 @@
 {
   "dashboard": {
-    "url": "__DASHBOARD_URL__"
+    "url": "http://192.168.68.75:8123/weekplan-yaml/test2"
   },
   "mqtt": {
-    "broker": "__MQTT_BROKER__",
-    "port": __MQTT_PORT__,
-    "username": "__MQTT_USERNAME__",
-    "password": "__MQTT_PASSWORD__",
+    "broker": "192.168.68.75",
+    "port": 1883,
     "client_id": "dashboard-display-pi",
     "topics": {
       "command": "dashboard/display/command",
@@ -19,17 +17,13 @@
     "wayland_display": "wayland-0"
   },
   "touchscreen": {
-    "usb_device_id": "__TOUCHSCREEN_USB_ID__",
+    "usb_device_id": "222a:0001",
     "detection_wait_seconds": 60
   },
   "kiosk": {
     "desktop_load_wait_seconds": 10,
     "onboard_size": "800x300",
-    "user_data_dir": "__CHROMIUM_USER_DATA_DIR__"
-  },
-  "wifi": {
-    "ssid": "__WIFI_SSID__",
-    "password": "__WIFI_PASSWORD__"
+    "user_data_dir": "/home/shaun/.config/chromium-kiosk"
   },
   "home_assistant": {
     "auth_method": "trusted_network"

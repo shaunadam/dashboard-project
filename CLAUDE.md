@@ -7,9 +7,14 @@ VM in the basement; the Pi is a display + MQTT client only.
 
 ## Non-negotiables
 - The Pi must cold-boot to the week planner page with working touch and zero intervention.
-- `config.json` holds credentials and is git-ignored. Never commit it. Schema lives in
-  `config.json.template`; if you add a config key, add it to the template, `lib/config.sh`,
-  `lib/config.py`, `setup/bootstrap.sh`, and `setup/verify.sh`.
+- Config is split in two, deep-merged by the loaders (secrets win):
+  `config.json` is **tracked** and holds everything non-secret — edit it here and it
+  reaches the Pi via `git pull`. `secrets.json` is git-ignored, mode 600, and holds
+  only `mqtt.username`, `mqtt.password`, `wifi.ssid`, `wifi.password`. Never commit it,
+  and never let a credential key back into `config.json` (`setup/verify.sh` fails if one
+  appears). New non-secret key: add it to `config.json` and any consumer. New secret:
+  add it to `secrets.json.template`, `setup/bootstrap.sh`, `setup/migrate-secrets.sh`,
+  `setup/config-restore.sh`, and `setup/verify.sh`.
 - All files are LF. Shell scripts must stay POSIX bash; the Pi has no dev tooling beyond
   python3, jq, git.
 - Never `scp` files to the Pi. The Pi only ever runs `git pull` via `setup/switch-branch.sh`.

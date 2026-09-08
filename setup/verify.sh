@@ -31,7 +31,7 @@ require_python_module() {
 check_config() {
   local config="${REPO_ROOT}/config.json"
   if [[ ! -f "${config}" ]]; then
-    issues+=("config.json not found; run bootstrap.sh")
+    issues+=("config.json not found; it is tracked in git — re-check out the repo")
     return
   fi
   # Validate JSON syntax
@@ -40,22 +40,56 @@ check_config() {
     return
   fi
   # Check required keys
-  local required_keys=(".dashboard.url" ".mqtt.broker" ".mqtt.port" ".touchscreen.usb_device_id")
+  local required_keys=(".dashboard.url" ".mqtt.broker" ".mqtt.port" ".touchscreen.usb_device_id" ".system.reboot_flag_file" ".system.reboot_flag_file_wifi" ".system.wifi_recovery_signal_file")
   for key in "${required_keys[@]}"; do
     if [[ "$(jq -r "${key} // empty" "${config}")" == "" ]]; then
       issues+=("config.json missing required key: ${key}")
     fi
   done
 
-  # Check WiFi config keys (needed for watchdog)
-  local wifi_keys=(".wifi.ssid" ".wifi.password")
-  for key in "${wifi_keys[@]}"; do
-    if [[ "$(jq -r "${key} // empty" "${config}")" == "" ]]; then
-      issues+=("config.json missing WiFi key: ${key} (needed for watchdog)")
+  # config.json is committed, so credentials must never appear in it.
+  local secret_keys=(".mqtt.username" ".mqtt.password" ".wifi.ssid" ".wifi.password")
+  for key in "${secret_keys[@]}"; do
+    if [[ "$(jq -r "${key} // empty" "${config}")" != "" ]]; then
+      issues+=("SECURITY: ${key} is present in the tracked config.json — it belongs in secrets.json")
     fi
   done
 
   log "config.json validated."
+}
+
+check_secrets() {
+  local secrets="${REPO_ROOT}/secrets.json"
+  if [[ ! -f "${secrets}" ]]; then
+    issues+=("secrets.json not found; run bootstrap.sh or setup/migrate-secrets.sh")
+    return
+  fi
+  if ! jq empty "${secrets}" 2>/dev/null; then
+    issues+=("secrets.json is not valid JSON")
+    return
+  fi
+
+  local required_keys=(".mqtt.username" ".mqtt.password" ".wifi.ssid" ".wifi.password")
+  for key in "${required_keys[@]}"; do
+    if [[ "$(jq -r "${key} // empty" "${secrets}")" == "" ]]; then
+      issues+=("secrets.json missing required key: ${key}")
+    fi
+  done
+
+  # The whole point of the split — make sure git really is ignoring it.
+  if git -C "${REPO_ROOT}" check-ignore -q secrets.json 2>/dev/null; then
+    log "secrets.json is git-ignored."
+  else
+    issues+=("SECURITY: secrets.json is not git-ignored — check .gitignore before committing")
+  fi
+
+  local mode
+  mode="$(stat -c '%a' "${secrets}" 2>/dev/null || echo "")"
+  if [[ -n "${mode}" && "${mode}" != "600" ]]; then
+    issues+=("secrets.json is mode ${mode}; expected 600 (chmod 600 ${secrets})")
+  fi
+
+  log "secrets.json validated."
 }
 
 check_libraries() {
@@ -188,6 +222,7 @@ main() {
   require_command jq
   require_python_module paho.mqtt.client
   check_config
+  check_secrets
   check_libraries
   check_autostart
   check_kiosk_script
